@@ -1,6 +1,8 @@
 #include <string>
 #include <vector>
 
+#include <rapidjson/document.h>
+
 using namespace std;
 
 namespace WAMPP {
@@ -54,12 +56,90 @@ struct Call: Message {
     Call(string id,
          string uri):
         Message(CALL),
-        callId(id),
+        callID(id),
         procURI(uri) {}
     
-    string callId;
+    string callID;
     string procURI;
-    vector<JSON::Value> args;
+    vector<rapidjson::Value> args;
 };
 
-}
+struct CallResult: Message {
+    CallResult(string id,
+               rapidjson::Value& res):
+        Message(CALLRESULT),
+        callID(id),
+        result(res) {}
+    
+    string callID;
+    rapidjson::Value& result;
+};
+
+struct CallError: Message {
+    CallError(string id,
+              string uri,
+              string desc,
+              rapidjson::Value& details):
+        Message(CALLERROR),
+        callID(id),
+        errorURI(uri),
+        errorDesc(desc),
+        errorDetails(details) {}
+
+/*    CallError(string id,
+              string uri,
+              string desc):
+        Message(CALLERROR),
+        callID(id),
+        errorURI(uri),
+        errorDesc(desc) {
+        errorDetails = rapidjson::Value();
+        } */
+
+    string callID;
+    string errorURI;
+    string errorDesc;
+    rapidjson::Value& errorDetails;
+};
+
+struct Subscribe: Message {
+    Subscribe(string uri):
+        Message(SUBSCRIBE),
+        topicURI(uri) {}
+
+    string topicURI;
+};
+
+struct UnSubscribe: Message {
+    UnSubscribe(string uri):
+        Message(UNSUBSCRIBE),
+        topicURI(uri) {}
+
+    string topicURI;
+};
+
+struct Publish: Message {
+    Publish(string uri,
+          rapidjson::Value& evt):
+        Message(EVENT),
+        topicURI(uri),
+        event(evt) {}
+
+    string topicURI;
+    rapidjson::Value& event;
+};
+
+// Note: exclusion/eligibility not supported
+
+struct Event: Message {
+    Event(string uri,
+          rapidjson::Value& evt):
+        Message(EVENT),
+        topicURI(uri),
+        event(evt) {}
+
+    string topicURI;
+    rapidjson::Value& event;
+};
+
+} // namespace WAMPP

@@ -1,4 +1,4 @@
-#include <yajl/yajl_tree.h>
+#include <rapidjson/document.h>
 
 #include <string>
 #include <cstring>
@@ -11,42 +11,37 @@ using namespace std;
 namespace WAMPP {
 
 Message* Parser::parse(string &message_buffer) {
-    yajl_val node = yajl_tree_parse(message_buffer.c_str(),
-                                    m_errbuf, sizeof(m_errbuf));
-    if (node == NULL) {
-        string error = "Parsing error:";
-        if (strlen(m_errbuf))
-            error += m_errbuf;
-        else
-            error += "unknown error";
-        LOGGER_WRITE(Logger::ERROR, error);
+    rapidjson::Document d;
+    d.Parse<0>(message_buffer.c_str());
+   
+    if (d.HasParseError()) {
+        LOGGER_WRITE(Logger::ERROR,"Invalid JSON at offset"
+                     + d.GetErrorOffset() 
+                     + ":" + d.GetParseError() );
         return NULL;
     }
 
-    if (!YAJL_IS_ARRAY(node)
-    || (YAJL_GET_ARRAY(node)->len == 0)
-    || (!YAJL_IS_NUMBER(YAJL_GET_ARRAY(node)->values[0]))
-    || (!((YAJL_GET_ARRAY(node)->values[0]->u.number.flags 
-        & YAJL_NUMBER_INT_VALID)))){
+    if (!d.IsArray()
+    || (d.Size() == 0)
+    || (!d[0u].IsNumber())
+    || (!d[0u].IsInt())) {
         LOGGER_WRITE(Logger::ERROR, "Not a WAMP message");
         return NULL;
     }
 
-    int msg_type = YAJL_GET_INTEGER(YAJL_GET_ARRAY(node)->values[0]);
-    int nargs = YAJL_GET_ARRAY(node)->len;
+    int msg_type = d[0u].GetInt();
+    int nargs = d.Size();
 
     Message* message = NULL;
 
     switch (msg_type) {
         case WELCOME:
             if (4 == nargs) {
-                if (YAJL_IS_STRING(YAJL_GET_ARRAY(node)->values[1])
-                && YAJL_IS_NUMBER(YAJL_GET_ARRAY(node)->values[2])
-                && YAJL_IS_STRING(YAJL_GET_ARRAY(node)->values[3])) {
+                if (d[1].IsString() && d[2].IsInt() && d[3].IsString()) {
                     message = new Welcome(
-                        YAJL_GET_STRING(YAJL_GET_ARRAY(node)->values[1]),
-                        YAJL_GET_INTEGER(YAJL_GET_ARRAY(node)->values[2]),
-                        YAJL_GET_STRING(YAJL_GET_ARRAY(node)->values[3])
+                        d[1].GetString(),
+                        d[2].GetInt(),
+                        d[3].GetString()
                     );
                 } else {
                     LOGGER_WRITE(Logger::ERROR, "Invalid argument in WELCOME message");
@@ -57,11 +52,10 @@ Message* Parser::parse(string &message_buffer) {
             break;
        case PREFIX:
             if (3 == nargs) {
-                if (YAJL_IS_STRING(YAJL_GET_ARRAY(node)->values[1])
-                && YAJL_IS_STRING(YAJL_GET_ARRAY(node)->values[2])) {
+                if (d[1].IsString() && d[2].IsString()) {
                     message = new Prefix(
-                        YAJL_GET_STRING(YAJL_GET_ARRAY(node)->values[1]),
-                        YAJL_GET_STRING(YAJL_GET_ARRAY(node)->values[2])
+                        d[1].GetString(),
+                        d[2].GetString()
                     );
                 } else {
                     LOGGER_WRITE(Logger::ERROR, "Invalid argument in PREFIX message");
@@ -71,10 +65,14 @@ Message* Parser::parse(string &message_buffer) {
             }
             break;
         case CALL:
-            if (3 < nargs) {
-                if (YAJL_IS_STRING(YAJL_GET_ARRAY(node)->values[1])
-                && YAJL_IS_STRING(YAJL_GET_ARRAY(node)->values[2])) {
-
+            if (2 < nargs) {
+                if (d[1].IsString() && d[2].IsString()) {
+                    message = new Call(
+                        d[1].GetString(),
+                        d[2].GetString()
+                    );
+                    for (rapidjson::SizeType i = 3; i < d.Size(); i++)
+                        static_cast<Call*>(message)->args.push_back(d[i]);
                 } else {
                     LOGGER_WRITE(Logger::ERROR, "Invalid argument in CALL message");
                 }
@@ -82,14 +80,86 @@ Message* Parser::parse(string &message_buffer) {
                 LOGGER_WRITE(Logger::ERROR, "Wrong number of arguments in CALL message");
             }
             break;
+        case CALLRESULT:
+            if (3 == nargs) {
+                if (d[1].IsString()) {
+                    message = new CallResult(d[1].GetString(),d[2]);
+                } else {
+                    LOGGER_WRITE(Logger::ERROR, "Invalid argument in CALLRESULT message");
+                }
+            } else {
+                LOGGER_WRITE(Logger::ERROR, "Wrong number of arguments in CALLRESULT message");
+            }
+            break;
+        case CALLERROR:
+            if (3 < nargs) {
+                if (d[1].IsString() && d[2].IsString() && d[3].IsString()) {
+                    if (4 == nargs) {
+                        message = new CallError(
+                            d[1].GetString(),
+                            d[2].GetString(),
+                            d[3].GetString(),
+                            d[4]);
+                    } else {
+                        // TODO
+                    }
+                } else {
+                    LOGGER_WRITE(Logger::ERROR, "Invalid argument in CALLERROR message");
+                }
+            } else {
+                LOGGER_WRITE(Logger::ERROR, "Wrong number of arguments in CALLERROR message");
+            }
+            break;
+        case SUBSCRIBE:
+            if (2 == nargs) {
+                if (d[1].IsString()) {
+                    message = new Subscribe(d[1].GetString());
+                } else {
+                    LOGGER_WRITE(Logger::ERROR, "Invalid argument in SUBSCRIBE message");
+                }
+            } else {
+                LOGGER_WRITE(Logger::ERROR, "Wrong number of arguments in SUBSCRIBE message");
+            }
+            break;
+        case UNSUBSCRIBE:
+            if (2 == nargs) {
+                if (d[1].IsString()) {
+                    message = new UnSubscribe(d[1].GetString());
+                } else {
+                    LOGGER_WRITE(Logger::ERROR, "Invalid argument in UNSUBSCRIBE message");
+                }
+            } else {
+                LOGGER_WRITE(Logger::ERROR, "Wrong number of arguments in UNSUBSCRIBE message");
+            }
+            break;
+        case PUBLISH:
+            if (3 == nargs) {
+                if (d[1].IsString()) {
+                    message = new Publish(d[1].GetString(),d[2]);
+                } else {
+                    LOGGER_WRITE(Logger::ERROR, "Invalid argument in PUBLISH message");
+                }
+            } else {
+                LOGGER_WRITE(Logger::ERROR, "Wrong number of arguments in PUBLISH message");
+            }
+            break;
+        case EVENT:
+            if (3 == nargs) {
+                if (d[1].IsString()) {
+                    message = new Event(d[1].GetString(),d[2]);
+                } else {
+                    LOGGER_WRITE(Logger::ERROR, "Invalid argument in EVENT message");
+                }
+            } else {
+                LOGGER_WRITE(Logger::ERROR, "Wrong number of arguments in EVENT message");
+            }
+            break;
         default:
             LOGGER_WRITE(Logger::ERROR, "Unknown WAMP message");
             break;
     }
 
-    yajl_tree_free(node);
-
     return message;
 }
 
-}
+} // namespace WAMPP

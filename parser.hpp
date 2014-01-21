@@ -1,6 +1,6 @@
-#include "protocol.hpp"
-
 #include <string>
+
+#include "protocol.hpp"
 
 using namespace std;
 
@@ -11,9 +11,6 @@ class Parser {
     Parser() {}
 
     Message* parse(string &message_buffer);
-
-private:
-    char m_errbuf[1024];
 
 };
 
