@@ -1,3 +1,6 @@
+#include "logger.hpp"
+#include "protocol.hpp"
+#include "util.hpp"
 #include "server.hpp"
 
 using websocketpp::connection_hdl;
@@ -5,14 +8,14 @@ using websocketpp::lib::placeholders::_1;
 using websocketpp::lib::placeholders::_2;
 using websocketpp::lib::bind;
 
-using websocketpp::lib::thread;
 using websocketpp::lib::mutex;
 using websocketpp::lib::unique_lock;
 using websocketpp::lib::condition_variable;
 
 namespace WAMPP {
 
-Server::Server() {
+Server::Server(const string& ident):
+    m_ident(ident) {
     // Initialize Asio Transport
     m_server.init_asio();
 
@@ -33,40 +36,40 @@ void Server::run(uint16_t port) {
     try {
         m_server.run();
     } catch (const std::exception & e) {
-        std::cout << e.what() << std::endl;
+        LOGGER_WRITE(Logger::DEBUG,e.what());
     } catch (websocketpp::lib::error_code e) {
-        std::cout << e.message() << std::endl;
+        LOGGER_WRITE(Logger::DEBUG,e.message());
     } catch (...) {
-        std::cout << "other exception" << std::endl;
+        LOGGER_WRITE(Logger::DEBUG,"other exception");
     }
 }
 
 void Server::on_open(connection_hdl hdl) {
     unique_lock<mutex> lock(m_action_lock);
-    std::cout << "on_open" << std::endl;
-    m_actions.push(action(SUBSCRIBE,hdl));
+    LOGGER_WRITE(Logger::DEBUG,"on_open");
+    m_actions.push(action(OPEN,hdl));
     lock.unlock();
     m_action_cond.notify_one(); 
 }
 
 void Server::on_close(connection_hdl hdl) {
     unique_lock<mutex> lock(m_action_lock);
-    std::cout << "on_close" << std::endl;
-    m_actions.push(action(UNSUBSCRIBE,hdl));
+    LOGGER_WRITE(Logger::DEBUG,"on_close");
+    m_actions.push(action(CLOSE,hdl));
     lock.unlock();
     m_action_cond.notify_one();
 }
 
-void Server::on_message(connection_hdl hdl, server::message_ptr msg) {
+void Server::on_message(connection_hdl hdl, WSServer::message_ptr msg) {
     // queue message up for sending by processing thread
     unique_lock<mutex> lock(m_action_lock);
-    std::cout << "on_message" << std::endl;
+    LOGGER_WRITE(Logger::DEBUG,"on_message");
     m_actions.push(action(MESSAGE,msg));
     lock.unlock();
     m_action_cond.notify_one();
 }
 
-void Server::process_messages() {
+void Server::actions_loop() {
     while(1) {
         unique_lock<mutex> lock(m_action_lock);
 
@@ -78,23 +81,41 @@ void Server::process_messages() {
         m_actions.pop();
 
         lock.unlock();
-        if (a.type == SUBSCRIBE) {
-            unique_lock<mutex> lock(m_connection_lock);
-            m_connections.insert(a.hdl);
-        } else if (a.type == UNSUBSCRIBE) {
-            unique_lock<mutex> lock(m_connection_lock);
-            m_connections.erase(a.hdl);
+        if (a.type == OPEN) {
+            string sessionId = genRandomId(16);
+            Welcome welcome(sessionId,m_ident);
+            unique_lock<mutex> lock(m_session_lock);
+            m_sessions.insert(std::make_pair(sessionId,a.hdl));
+            send(a.hdl,&welcome);
+        } else if (a.type == CLOSE) {
+            unique_lock<mutex> lock(m_session_lock);
+            m_sessions.erase(std::make_pair("",a.hdl));
         } else if (a.type == MESSAGE) {
-            unique_lock<mutex> lock(m_connection_lock);
-
-            con_list::iterator it;
-            for (it = m_connections.begin(); it != m_connections.end(); ++it) {
-                m_server.send(*it,a.msg);
+            unique_lock<mutex> lock(m_session_lock);
+            Message* wamp_msg = new Message(a.msg->get_payload());
+            switch (wamp_msg->getType()) {
+                case WELCOME:
+                case CALLRESULT:
+                case CALLERROR:
+                case EVENT:
+                    LOGGER_WRITE(Logger::ERROR,"Ignoring Server to Client message");
+                    delete wamp_msg;
+                    break;
+                default:
+                    break;
             }
         } else {
             // undefined.
         }
     }
+}
+
+void Server::send(connection_hdl hdl, Message* msg) {
+    rapidjson::StringBuffer s(0, 1024*1024);
+    msg->serialize(s);
+    m_server.send(hdl,s.GetString(),
+                         //s.Size(),
+                          websocketpp::frame::opcode::text);
 }
 
 } // namespace WAMPP

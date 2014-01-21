@@ -1,19 +1,26 @@
 #include <iostream>
-#include "wamp_server.hpp"
+#include "server.hpp"
+#include "logger.hpp"
+
+using websocketpp::lib::bind;
+using websocketpp::lib::thread;
 
 int main() {
-	try {
-	wamp_server server;
+    // Log everything to stdout
+    LOGGER_START(Logger::DEBUG, "")
+    try {
+        WAMPP::Server server("WAMPP Server 1.0");
 
-	// Start a thread to run the processing loop
-	thread t(bind(&wamp_server::process_messages,&server));
+        // Start a thread to run the processing loop
+        thread t(bind(&WAMPP::Server::actions_loop,&server));
 
-	// Run the asio loop with the main thread
-	server.run(9002);
+        // Run the asio loop with the main thread
+        server.run(9002);
 
-	t.join();
+        t.join();
 
-	} catch (std::exception & e) {
-	    std::cout << e.what() << std::endl;
-	}
+    } catch (std::exception & e) {
+        LOGGER_WRITE(Logger::ERROR, e.what())
+    }
+    LOGGER_STOP()
 }
