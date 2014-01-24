@@ -35,7 +35,7 @@ public:
         return m_type;
     }
     rapidjson::Type getParamType(int index);
-    const rapidjson::Value& getParam(int index);
+    const rapidjson::Value& getParam(unsigned int index);
     rapidjson::Document::AllocatorType getAllocator();
 
     void serialize(rapidjson::StringBuffer& s);

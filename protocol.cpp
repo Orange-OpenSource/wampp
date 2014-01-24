@@ -128,6 +128,14 @@ void Message::serialize(rapidjson::StringBuffer& s) {
     m_d.Accept(writer);
 }
 
+const rapidjson::Value& Message::getParam(unsigned int index) {
+    if (index < m_d.Size()) {
+        return m_d[index];
+    } else {
+        return NULL;
+    }
+}
+
 Welcome::Welcome(const string& sessionId, const string& serverIdent):
     Message(WELCOME) {
     rapidjson::Document::AllocatorType& allocator = m_d.GetAllocator();

@@ -15,10 +15,16 @@ typedef websocketpp::server<websocketpp::config::asio> WSServer;
 
 using websocketpp::connection_hdl;
 
+
 using websocketpp::lib::mutex;
 using websocketpp::lib::condition_variable;
+using websocketpp::lib::thread;
+using websocketpp::lib::shared_ptr;
+using websocketpp::lib::function;
 
 namespace WAMPP {
+
+class Message;
 
 enum action_type {
     OPEN,
@@ -35,6 +41,7 @@ struct action {
     WSServer::message_ptr msg;
 };
 
+
 typedef std::pair<string,connection_hdl> Session;
 
 class SessionComparator
@@ -46,11 +53,12 @@ public:
     }
 };
 
-class Message;
+typedef ::function<void(connection_hdl,string,Message*)> RemoteProc;
 
 class Server {
 public:
     Server(const string& ident);
+    ~Server();
 
     void run(uint16_t port);
 
@@ -60,18 +68,20 @@ public:
 
     void actions_loop();
 
-private:
-    typedef std::set<connection_hdl,std::owner_less<connection_hdl>> con_list;
-    typedef std::set<Session,SessionComparator> sess_list;
+    void addRPC(string uri, RemoteProc rpc);
 
+private:
     WSServer m_server;
-    con_list m_connections;
-    sess_list m_sessions;
+
+    shared_ptr<thread> m_actions_thread;
+    
+    std::set<Session,SessionComparator> m_sessions;
     std::queue<action> m_actions;
+    std::map<string,RemoteProc> m_rpcs; 
 
     mutex m_action_lock;
-    mutex m_connection_lock;
     mutex m_session_lock;
+    mutex m_rpc_lock;
     condition_variable m_action_cond;
 
     void send(connection_hdl hdl, Message* msg);

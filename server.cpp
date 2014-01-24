@@ -8,6 +8,7 @@ using websocketpp::lib::placeholders::_1;
 using websocketpp::lib::placeholders::_2;
 using websocketpp::lib::bind;
 
+using websocketpp::lib::thread;
 using websocketpp::lib::mutex;
 using websocketpp::lib::unique_lock;
 using websocketpp::lib::condition_variable;
@@ -23,8 +24,17 @@ Server::Server(const string& ident):
     m_server.set_open_handler(bind(&Server::on_open,this,::_1));
     m_server.set_close_handler(bind(&Server::on_close,this,::_1));
     m_server.set_message_handler(bind(&Server::on_message,this,::_1,::_2));
+
+    // Start a thread to run the processing loop
+    m_actions_thread.reset(new thread(bind(&Server::actions_loop,this)));
 }
 
+Server::~Server() {
+    // Terminate the actions thread
+    m_actions_thread->join();
+}
+
+// Run the asio loop (called from main thread)
 void Server::run(uint16_t port) {
     // listen on specified port
     m_server.listen(port);
@@ -98,9 +108,25 @@ void Server::actions_loop() {
                 case CALLRESULT:
                 case CALLERROR:
                 case EVENT:
+                {
                     LOGGER_WRITE(Logger::ERROR,"Ignoring Server to Client message");
                     delete wamp_msg;
                     break;
+                }
+                case CALL:
+                {
+                    string callID = wamp_msg->getParam(1).GetString();
+                    string procURI = wamp_msg->getParam(2).GetString();
+                    unique_lock<mutex> lock(m_rpc_lock);
+                    std::map<string,RemoteProc>::iterator it = m_rpcs.find(procURI);
+                    if(it != m_rpcs.end()) {
+                        // Call RPC
+                        it->second(a.hdl,callID,wamp_msg);
+                    } else {
+                        LOGGER_WRITE(Logger::ERROR,"No such method");
+                    }      
+                    break;
+                }
                 default:
                     break;
             }
@@ -116,6 +142,11 @@ void Server::send(connection_hdl hdl, Message* msg) {
     m_server.send(hdl,s.GetString(),
                          //s.Size(),
                           websocketpp::frame::opcode::text);
+}
+
+void Server::addRPC(string uri, RemoteProc rpc) {
+    unique_lock<mutex> lock(m_rpc_lock);
+    m_rpcs.insert(std::make_pair(uri,rpc));
 }
 
 } // namespace WAMPP
