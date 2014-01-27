@@ -140,7 +140,6 @@ void Server::send(connection_hdl hdl, Message* msg) {
     rapidjson::StringBuffer s(0, 1024*1024);
     msg->serialize(s);
     m_server.send(hdl,s.GetString(),
-                         //s.Size(),
                           websocketpp::frame::opcode::text);
 }
 

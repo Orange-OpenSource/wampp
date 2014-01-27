@@ -31,14 +31,13 @@ public:
     Message(message_type t);
     Message(const string& buffer);
 
-    const message_type& getType() {
+    message_type getType() const {
         return m_type;
     }
-    rapidjson::Type getParamType(int index);
-    const rapidjson::Value& getParam(unsigned int index);
-    rapidjson::Document::AllocatorType getAllocator();
+    const rapidjson::Value& getParam(unsigned int index) const;
+    unsigned int getParamSize() const;
 
-    void serialize(rapidjson::StringBuffer& s);
+    void serialize(rapidjson::StringBuffer& s) const;
 
 protected:
     rapidjson::Document m_d;

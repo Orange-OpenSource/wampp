@@ -123,17 +123,25 @@ Message::Message(const string& message_buffer) {
     }
 }
 
-void Message::serialize(rapidjson::StringBuffer& s) {
+void Message::serialize(rapidjson::StringBuffer& s) const {
     rapidjson::Writer<rapidjson::StringBuffer> writer(s);
     m_d.Accept(writer);
 }
 
-const rapidjson::Value& Message::getParam(unsigned int index) {
+const rapidjson::Value& Message::getParam(unsigned int index) const {
     if (index < m_d.Size()) {
         return m_d[index];
     } else {
         return NULL;
     }
+}
+
+unsigned int Message::getParamSize() const {
+    int size = 0;
+    if (m_d.IsArray()) {
+        size = m_d.Size();
+    }
+    return size;
 }
 
 Welcome::Welcome(const string& sessionId, const string& serverIdent):
