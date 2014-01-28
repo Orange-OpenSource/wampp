@@ -9,6 +9,8 @@
 
 #include <websocketpp/common/thread.hpp>
 
+#include "json.hpp"
+
 using std::string;
 
 typedef websocketpp::server<websocketpp::config::asio> WSServer;
@@ -53,7 +55,7 @@ public:
     }
 };
 
-typedef ::function<void(connection_hdl,string,Message*)> RemoteProc;
+typedef ::function<void(connection_hdl,string,std::vector<JSON::NodePtr>)> RemoteProc;
 
 class Server {
 public:

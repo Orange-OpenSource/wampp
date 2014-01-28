@@ -3,6 +3,7 @@ bin_PROGRAMS = wampp
 wampp_SOURCES = main.cpp 		\
 				server.cpp 		\
 				protocol.cpp	\
+				json.cpp		\
 				util.cpp		\
 				logger.cpp
 

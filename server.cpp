@@ -120,8 +120,14 @@ void Server::actions_loop() {
                     unique_lock<mutex> lock(m_rpc_lock);
                     std::map<string,RemoteProc>::iterator it = m_rpcs.find(procURI);
                     if(it != m_rpcs.end()) {
+                        // Prepare args
+                        std::vector<JSON::NodePtr> args;
+                        for (int i=3; i<wamp_msg->getParamSize();i++) {
+                            JSON::NodePtr arg(new JSON::Node(wamp_msg->getParam(i)));
+                            args.push_back(arg);
+                        }   
                         // Call RPC
-                        it->second(a.hdl,callID,wamp_msg);
+                        it->second(a.hdl,callID,args);
                     } else {
                         LOGGER_WRITE(Logger::ERROR,"No such method");
                     }      
