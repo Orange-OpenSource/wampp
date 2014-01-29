@@ -6,153 +6,155 @@
 #include "logger.hpp"
 #include "protocol.hpp"
 
-using namespace std;
+using std::string;
 
 namespace WAMPP {
 
 Message::Message(message_type t): m_type(t) {
     if (t != UNDEFINED) {
         // Initialize an empty JSON Array
-        m_d.SetArray();
+        m_pNode = JSON::NodePtr(new JSON::Node());
+        m_pNode->data = JSON::Array();
         // Set first parameter as Message type
-        rapidjson::Document::AllocatorType& allocator = m_d.GetAllocator();
-        m_d.PushBack(t,allocator);
+        JSON::NodePtr pType = JSON::NodePtr(new JSON::Node(int(m_type)));
+        boost::get<JSON::Array>(m_pNode->data).push_back(pType);
     }
 }
 
-Message::Message(const string& message_buffer) {
-
-    // Expect the worse 
-    m_type = UNDEFINED;
-
-    //Try to parse the JSON payload
-    m_d.Parse<0>(message_buffer.c_str());
-
-    if (m_d.HasParseError()) {
-        LOGGER_WRITE(Logger::ERROR,m_d.GetParseError());
-        return;
-    }
-
-    if (!m_d.IsArray()
-    || (m_d.Size() == 0)
-    || (!m_d[0u].IsNumber())
-    || (!m_d[0u].IsInt())) {
-        LOGGER_WRITE(Logger::ERROR, "Not a WAMP message");
-        return;
-    }
-
-    int msg_type = m_d[0u].GetInt();
-    if (msg_type < 0 || msg_type > 8) {
-        LOGGER_WRITE(Logger::ERROR, "Invalid WAMP message type");
-        return;
-    }
-
-    int nargs = m_d.Size();
-
-    switch (msg_type) {
-        case WELCOME:
-            if (4 == nargs) {
-                if (m_d[1].IsString() && m_d[2].IsInt() && m_d[3].IsString()) {
-                    m_type= WELCOME;
-                }
-            }
-            break;
-       case PREFIX:
-            if (3 == nargs) {
-                if (m_d[1].IsString() && m_d[2].IsString()) {
-                    m_type = PREFIX;
-                }
-            }
-            break;
-        case CALL:
-            if (2 < nargs) {
-                if (m_d[1].IsString() && m_d[2].IsString()) {
-                    m_type = CALL;
-                }
-            }
-            break;
-        case CALLRESULT:
-            if (3 == nargs) {
-                if (m_d[1].IsString()) {
-                    m_type = CALLRESULT;
-                }
-            }
-            break;
-        case CALLERROR:
-            if (3 < nargs) {
-                if (m_d[1].IsString() && m_d[2].IsString() && m_d[3].IsString()) {
-                    m_type = CALLERROR;
-                }
-            }
-            break;
-        case SUBSCRIBE:
-            if (2 == nargs) {
-                if (m_d[1].IsString()) {
-                    m_type = SUBSCRIBE;
-                }
-            }
-            break;
-        case UNSUBSCRIBE:
-            if (2 == nargs) {
-                if (m_d[1].IsString()) {
-                    m_type = UNSUBSCRIBE;
-                }
-            }
-            break;
-        case PUBLISH:
-            if (3 == nargs) {
-                if (m_d[1].IsString()) {
-                    m_type = PUBLISH;
-                }
-            }
-            break;
-        case EVENT:
-            if (3 == nargs) {
-                if (m_d[1].IsString()) {
-                    m_type = EVENT;
-                }
-            }
-            break;
-        default:
-            LOGGER_WRITE(Logger::ERROR, "Unknown WAMP message");
-            return;
-    }
-
-    if (m_type == UNDEFINED) {
-        LOGGER_WRITE(Logger::ERROR, "Malformed WAMP message");
+void Message::serialize(std::ostream& output) const {
+    if (m_pNode) {
+        boost::apply_visitor(JSON::Serializer(output),m_pNode->data);
     }
 }
 
-void Message::serialize(rapidjson::StringBuffer& s) const {
-    rapidjson::Writer<rapidjson::StringBuffer> writer(s);
-    m_d.Accept(writer);
+void Message::appendString(const string& s) {
+    if (m_pNode) {
+        JSON::NodePtr pTmp = JSON::NodePtr(new JSON::Node(s));
+        boost::get<JSON::Array>(m_pNode->data).push_back(pTmp);
+    }
 }
 
-const rapidjson::Value& Message::getParam(unsigned int index) const {
-    if (index < m_d.Size()) {
-        return m_d[index];
+void Message::appendInt(int i) {
+    if (m_pNode) {
+        JSON::NodePtr pTmp = JSON::NodePtr(new JSON::Node(i));
+        boost::get<JSON::Array>(m_pNode->data).push_back(pTmp);
+    }
+}
+
+void Message::appendNode(JSON::NodePtr pNode) {
+    if (m_pNode) {
+        boost::get<JSON::Array>(m_pNode->data).push_back(pNode);
+    }
+}
+
+JSON::NodePtr Message::getNode(unsigned int index) const {
+    JSON::NodePtr result = NULL;
+    if (m_pNode) {
+        if (index < boost::get<JSON::Array>(m_pNode->data).size()){
+            result = boost::get<JSON::Array>(m_pNode->data)[index];
+        }
+    }
+    return result;
+}
+
+const string& Message::getString(unsigned int index) const {
+    JSON::NodePtr pNode = getNode(index);
+    if (pNode) {
+        return boost::get<string>(pNode->data);
     } else {
-        return NULL;
+        return string("");
     }
 }
 
-unsigned int Message::getParamSize() const {
-    int size = 0;
-    if (m_d.IsArray()) {
-        size = m_d.Size();
+int Message::getInt(unsigned int index) const {
+    JSON::NodePtr pNode = getNode(index);
+    if (pNode) {
+        return boost::get<int>(pNode->data);
+    } else {
+        return 0;
     }
-    return size;
 }
 
-Welcome::Welcome(const string& sessionId, const string& serverIdent):
-    Message(WELCOME) {
-    rapidjson::Document::AllocatorType& allocator = m_d.GetAllocator();
-    rapidjson::Value v;
-    v.SetString(sessionId.c_str(),sessionId.size(),allocator);
-    m_d.PushBack(v,allocator);
-    m_d.PushBack(WAMPP_PROTOCOL_VERSION,allocator);
-    v.SetString(serverIdent.c_str(),serverIdent.size(),allocator);
-    m_d.PushBack(v,allocator);
+Welcome::Welcome(const string& sessionId,
+                 int protocolVersion,
+                const string& serverIdent): Message(WELCOME) {
+    appendString(sessionId);
+    appendInt(protocolVersion);
+    appendString(serverIdent);
+}
+
+Prefix::Prefix(const string& prefix,
+               const string& URI): Message(PREFIX) {
+    appendString(prefix);
+    appendString(URI);
+}
+
+Call::Call(const string& callID,
+           const string& procURI,
+           std::vector<JSON::NodePtr> args): Message(CALL) {
+    appendString(callID);
+    appendString(procURI);
+    std::vector<JSON::NodePtr>::const_iterator itr;
+    for(itr = args.begin(); itr != args.end(); itr++) {
+        appendNode(*itr);
+    }
+}
+
+const string& Call::callID() const{
+    return getString(1);
+}
+
+const string& Call::procURI() const{
+    return getString(2);
+}
+
+std::vector<JSON::NodePtr> Call::args() const {
+    std::vector<JSON::NodePtr> result;
+    int index = 3;
+    JSON::NodePtr pNode = getNode(index);
+    while (pNode) {
+        result.push_back(pNode);
+        pNode = getNode(++index);
+    }
+    return result;
+}
+
+CallResult::CallResult(const string& callID,
+                       JSON::NodePtr result): Message(CALLRESULT) {
+    appendString(callID);
+    appendNode(result);
+}
+
+CallError::CallError(const string& callID,
+                     const string& errorURI,
+                     const string& errorDesc,
+                     JSON::NodePtr errorDetails): Message(CALLERROR) {
+    appendString(callID);
+    appendString(errorURI);
+    appendString(errorDesc);
+    if (errorDetails) {
+        appendNode(errorDetails);
+    }
+}
+
+Subscribe::Subscribe(const string& topicURI): Message(SUBSCRIBE) {
+    appendString(topicURI);
+}
+
+UnSubscribe::UnSubscribe(const string& topicURI): Message(UNSUBSCRIBE) {
+    appendString(topicURI);
+}
+
+Publish::Publish(const string& topicURI,
+                 JSON::NodePtr event): Message(PUBLISH) {
+    appendString(topicURI);
+    appendNode(event);
+}
+
+Event::Event(const string& topicURI,
+             JSON::NodePtr event): Message(EVENT) {
+    appendString(topicURI);
+    appendNode(event);
 }
 
 } // namespace WAMPP

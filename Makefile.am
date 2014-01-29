@@ -1,10 +1,11 @@
 bin_PROGRAMS = wampp			
 
-wampp_SOURCES = main.cpp 		\
-				server.cpp 		\
-				protocol.cpp	\
-				json.cpp		\
-				util.cpp		\
+wampp_SOURCES = main.cpp     \
+				server.cpp   \
+				protocol.cpp \
+				json.cpp     \
+				parser.cpp   \
+				util.cpp     \
 				logger.cpp
 
 wampp_CPPFLAGS = $(WEBSOCKETPP_CPPFLAGS) \
