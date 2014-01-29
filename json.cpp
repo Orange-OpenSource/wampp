@@ -47,7 +47,6 @@ Node::Node(const rapidjson::Value &val) {
         case rapidjson::kStringType:
         {
             data = std::string(val.GetString());
-            LOGGER_WRITE(Logger::DEBUG,val.GetString());
             break;
         }
         case rapidjson::kNumberType:
