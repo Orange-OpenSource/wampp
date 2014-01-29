@@ -1,5 +1,6 @@
 #include "logger.hpp"
 #include "protocol.hpp"
+#include "parser.hpp"
 #include "util.hpp"
 #include "server.hpp"
 
@@ -74,7 +75,7 @@ void Server::on_message(connection_hdl hdl, WSServer::message_ptr msg) {
     // queue message up for sending by processing thread
     unique_lock<mutex> lock(m_action_lock);
     LOGGER_WRITE(Logger::DEBUG,"on_message");
-    m_actions.push(action(MESSAGE,msg));
+    m_actions.push(action(MESSAGE,hdl,msg));
     lock.unlock();
     m_action_cond.notify_one();
 }
@@ -93,7 +94,7 @@ void Server::actions_loop() {
         lock.unlock();
         if (a.type == OPEN) {
             string sessionId = genRandomId(16);
-            Welcome welcome(sessionId,m_ident);
+            Welcome welcome(sessionId,WAMPP_PROTOCOL_VERSION,m_ident);
             unique_lock<mutex> lock(m_session_lock);
             m_sessions.insert(std::make_pair(sessionId,a.hdl));
             send(a.hdl,&welcome);
@@ -102,39 +103,42 @@ void Server::actions_loop() {
             m_sessions.erase(std::make_pair("",a.hdl));
         } else if (a.type == MESSAGE) {
             unique_lock<mutex> lock(m_session_lock);
-            Message* wamp_msg = new Message(a.msg->get_payload());
-            switch (wamp_msg->getType()) {
-                case WELCOME:
-                case CALLRESULT:
-                case CALLERROR:
-                case EVENT:
-                {
-                    LOGGER_WRITE(Logger::ERROR,"Ignoring Server to Client message");
-                    delete wamp_msg;
-                    break;
+            Message* wamp_msg = parseMessage(a.msg->get_payload());
+            if (wamp_msg) {
+                switch (wamp_msg->getType()) {
+                    case WELCOME:
+                    case CALLRESULT:
+                    case CALLERROR:
+                    case EVENT:
+                    {
+                        LOGGER_WRITE(Logger::ERROR,"Ignoring Server to Client message");
+                        delete wamp_msg;
+                        break;
+                    }
+                    case CALL:
+                    {
+                        string callID = ((Call *)wamp_msg)->callID();
+                        string procURI = ((Call *)wamp_msg)->procURI();
+                        unique_lock<mutex> lock(m_rpc_lock);
+                        std::map<string,RemoteProc>::iterator it = m_rpcs.find(procURI);
+                        if(it != m_rpcs.end()) {
+                            // Call RPC
+                            JSON::NodePtr result = it->second(a.hdl,
+                                                          callID,
+                                                          ((Call *)wamp_msg)->args());
+                            if (result != NULL) {
+                                CallResult response(callID,result);
+                                send(a.hdl,&response);
+                            }
+                        } else {
+                            LOGGER_WRITE(Logger::ERROR,"No such method");
+                        }
+                        break;
+                    }
+                    default:
+                        break;
                 }
-                case CALL:
-                {
-                    string callID = wamp_msg->getParam(1).GetString();
-                    string procURI = wamp_msg->getParam(2).GetString();
-                    unique_lock<mutex> lock(m_rpc_lock);
-                    std::map<string,RemoteProc>::iterator it = m_rpcs.find(procURI);
-                    if(it != m_rpcs.end()) {
-                        // Prepare args
-                        std::vector<JSON::NodePtr> args;
-                        for (int i=3; i<wamp_msg->getParamSize();i++) {
-                            JSON::NodePtr arg(new JSON::Node(wamp_msg->getParam(i)));
-                            args.push_back(arg);
-                        }   
-                        // Call RPC
-                        it->second(a.hdl,callID,args);
-                    } else {
-                        LOGGER_WRITE(Logger::ERROR,"No such method");
-                    }      
-                    break;
-                }
-                default:
-                    break;
+                delete wamp_msg;
             }
         } else {
             // undefined.
@@ -143,10 +147,9 @@ void Server::actions_loop() {
 }
 
 void Server::send(connection_hdl hdl, Message* msg) {
-    rapidjson::StringBuffer s(0, 1024*1024);
-    msg->serialize(s);
-    m_server.send(hdl,s.GetString(),
-                          websocketpp::frame::opcode::text);
+    std::ostringstream oss;
+    msg->serialize(oss);
+    m_server.send(hdl,oss.str(),websocketpp::frame::opcode::text);
 }
 
 void Server::addRPC(string uri, RemoteProc rpc) {

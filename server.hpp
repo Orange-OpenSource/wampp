@@ -35,8 +35,11 @@ enum action_type {
 };
 
 struct action {
-    action(action_type t, connection_hdl h) : type(t), hdl(h) {}
-    action(action_type t, WSServer::message_ptr m) : type(t), msg(m) {}
+    action(action_type t,
+           connection_hdl h) : type(t), hdl(h) {}
+    action(action_type t,
+           connection_hdl h,
+           WSServer::message_ptr m) : type(t), hdl(h), msg(m) {}
 
     action_type type;
     connection_hdl hdl;
@@ -55,7 +58,7 @@ public:
     }
 };
 
-typedef ::function<void(connection_hdl,string,std::vector<JSON::NodePtr>)> RemoteProc;
+typedef ::function<JSON::NodePtr(connection_hdl,string,std::vector<JSON::NodePtr>)> RemoteProc;
 
 class Server {
 public:
