@@ -1,3 +1,6 @@
+#ifndef WAMPP_LOGGER_HPP_
+#define WAMPP_LOGGER_HPP_
+
 #include <string>
 #include <fstream>
 #include <iostream>
@@ -57,3 +60,5 @@ private:
 #define LOGGER_WRITE(PRIORITY, MESSAGE)
 
 #endif
+
+#endif // WAMP_LOGGER_HPP_
