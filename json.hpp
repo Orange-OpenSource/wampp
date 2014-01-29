@@ -41,6 +41,14 @@ struct Node {
     Node() {}
     Node(const rapidjson::Value &val);
 
+    Node(bool b): data(b) {}
+    Node(int i): data(i) {}
+    Node(unsigned int ui): data(ui) {}
+    Node(int64_t i): data(i) {}
+    Node(uint64_t ui): data(ui) {}
+    Node(double d): data(d) {}
+    Node(std::string s): data(s) {}
+
     Value data;
 };
 
