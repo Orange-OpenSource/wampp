@@ -48,7 +48,7 @@ void Message::appendNode(JSON::NodePtr pNode) {
 }
 
 JSON::NodePtr Message::getNode(unsigned int index) const {
-    JSON::NodePtr result = NULL;
+    JSON::NodePtr result;
     if (m_pNode) {
         if (index < boost::get<JSON::Array>(m_pNode->data).size()){
             result = boost::get<JSON::Array>(m_pNode->data)[index];

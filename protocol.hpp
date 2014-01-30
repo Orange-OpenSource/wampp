@@ -87,7 +87,7 @@ public:
     CallError(const string& callID,
               const string& errorURI,
               const string& errorDesc,
-              JSON::NodePtr errorDetails = NULL);
+              JSON::NodePtr errorDetails = JSON::NodePtr());
     const string& callID();
     const string& errorURI();
     const string& errorDesc();
