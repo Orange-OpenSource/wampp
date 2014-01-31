@@ -12,6 +12,8 @@ wampp_SOURCES = main.cpp     \
 
 wampp_CPPFLAGS = $(WEBSOCKETPP_CPPFLAGS) \
 				 $(BOOST_CPPFLAGS) \
+				 $(BOOST_SYSTEM_CPPFLAGS) \
+				 $(BOOST_ASIO_CPPFLAGS) \
 				 $(RAPIDJSON_CPPFLAGS)\
 				 -DENABLE_LOGGER
 

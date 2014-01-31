@@ -1,14 +1,14 @@
 # ===========================================================================
-#     ax_cxx_noexcept_token.m4
+#     ax_cxx_addressof.m4
 # ===========================================================================
 #
 # SYNOPSIS
 #
-#   AX_CXX_NOEXCEPT
+#   AX_CXX_ADDRESSOF
 #
 # DESCRIPTION
 #
-#   If the C++ compiler supports the noexcept keyword, define HAVE_CXX_NOEXCEPT.
+#   If the C++ compiler supports std::addressof, define HAVE_CXX_ADDRESSOF.
 #
 # LICENSE
 #
@@ -19,19 +19,19 @@
 #   and this notice are preserved. This file is offered as-is, without any
 #   warranty.
 
-AU_ALIAS([AC_CXX_NOEXCEPT], [AX_CXX_NOEXCEPT])
-AC_DEFUN([AX_CXX_NOEXCEPT],
-[AC_CACHE_CHECK(whether the compiler supports the noexcept token,
-ax_cv_cxx_noexcept,
+AU_ALIAS([AC_CXX_ADDRESSOF], [AX_CXX_ADDRESSOF])
+AC_DEFUN([AX_CXX_ADDRESSOF],
+[AC_CACHE_CHECK(whether the compiler supports std::addressof,
+ax_cv_cxx_addressof,
 [AC_LANG_SAVE
  AC_LANG_CPLUSPLUS
  SAVE_CXXFLAGS=$CXXFLAGS
- AC_TRY_COMPILE(,[void foo() noexcept;],
- ax_cv_cxx_noexcept=yes, ax_cv_cxx_noexcept=no)
+ AC_TRY_COMPILE([#include <memory>],[using std::addressof;],
+ ax_cv_cxx_addressof=yes, ax_cv_cxx_addressof=no)
  CXXFLAGS=$SAVE_CXXFLAGS
  AC_LANG_RESTORE
 ])
-if test "$ax_cv_cxx_noexcept" = yes; then
-  AC_DEFINE(HAVE_CXX_NOEXCEPT,,[define if the compiler supports the noexcept token])
+if test "$ax_cv_cxx_addressof" = yes; then
+  AC_DEFINE(HAVE_CXX_ADDRESSOF,,[define if the compiler supports std::addressof])
 fi
 ])

@@ -10,7 +10,7 @@ AC_ARG_VAR([WEBSOCKETPP_PATH],[Path to WebSocketPP library])
 AC_ARG_VAR([RAPIDJSON_PATH],[Path to rapidJSON library])
 
 dnl Check for C++0x support, and set CXXFLAGS accordingly
-AX_CXX_COMPILE_STDCXX_0X
+AX_CXX_COMPILE_STDCXX_0X()
 if test "$ax_cv_cxx_compile_cxx0x_native" != yes &&
    test "$ax_cv_cxx_compile_cxx0x_cxx" != yes &&
    test "$ax_cv_cxx_compile_cxx0x_gxx" != yes; then
@@ -24,18 +24,59 @@ else
     fi
 fi
 
-dnl Check for Boost libraries and:
-dnl - Set BOOST_CPPFLAGS
-dnl - Set BOOST_REGEX_LIB
-dnl - Set BOOST_SYSTEM_LIB
+dnl Check for Boost libraries
 
+dnl Boost base (this sets BOOST_CPPFLAGS)
 AX_BOOST_BASE([1.49.0])
-AX_BOOST_ASIO()
-AX_BOOST_REGEX()
-AX_BOOST_SYSTEM()
 
-dnl Check for WebSocketPP library and:
-dnl - Set WEBSOCKETPP_CPPFLAGS
+dnl Boost system (set BOOST_SYSTEM_CPPFLAGS and BOOST_SYSTEM_LIB)
+
+dnl Workaround wrong detection of the default keyword
+AX_CXX_DEFAULT_FUNC()
+if test "$ax_cv_cxx_default_func" != yes; then
+    BOOST_SYSTEM_CPPFLAGS="-DBOOST_NO_DEFAULTED_FUNCTIONS"
+fi
+
+AC_LANG_PUSH([C++])
+ac_save_cxx_flags="$CXXFLAGS"
+CXXFLAGS="$CXXFLAGS $BOOST_SYSTEM_CPPFLAGS"
+AC_CHECK_HEADERS([boost/system/error_code.hpp], [],
+    [AC_MSG_ERROR(You need the Boost system library.)])
+CXXFLAGS="$ac_save_cxx_flags"
+AC_LANG_POP([C++])
+
+BOOST_SYSTEM_LIB="-lboost_system"
+
+AC_SUBST(BOOST_SYSTEM_CPPFLAGS)
+AC_SUBST(BOOST_SYSTEM_LIB)
+
+dnl Boost Asio (Set BOOST_ASIO_CPPFLAGS)
+
+dnl Workaround wrong detection of std::addressof
+AX_CXX_ADDRESSOF()
+if test "$ax_cv_cxx_addressof" != yes; then
+    BOOST_ASIO_CPPFLAGS="-DBOOST_ASIO_DISABLE_STD_ADDRESSOF"
+fi
+
+AC_LANG_PUSH([C++])
+ac_save_cxx_flags="$CXXFLAGS"
+CXXFLAGS="$CXXFLAGS \
+          $BOOST_SYSTEM_CPPFLAGS
+          $BOOST_ASIO_CPPFLAGS"
+AC_CHECK_HEADERS([boost/asio.hpp], [],
+    [AC_MSG_ERROR(You need the Boost asio library.)])
+CXXFLAGS="$ac_save_cxx_flags"
+AC_LANG_POP([C++])
+
+AC_SUBST(BOOST_ASIO_CPPFLAGS)
+
+dnl Boost regex
+AC_LANG_PUSH([C++])
+AC_CHECK_HEADERS([boost/regex.hpp], [],
+    [AC_MSG_ERROR(You need the Boost Regex library.)])
+AC_LANG_POP([C++])
+
+dnl Check for WebSocketPP library (Set WEBSOCKETPP_CPPFLAGS)
 
 WEBSOCKETPP_CPPFLAGS="-D_WEBSOCKETPP_CPP11_STL_"
 WEBSOCKETPP_CPPFLAGS="$WEBSOCKETPP_CPPFLAGS -D_WEBSOCKETPP_NO_CPP11_REGEX_"
@@ -46,7 +87,7 @@ fi
 dnl Check for noexcept token
 AX_CXX_NOEXCEPT()
 if test "$ax_cv_cxx_noexcept" != yes; then
-    WEBSOCKETPP_CPPFLAGS="WEBSOCKETPP_CPPFLAGS -D_WEBSOCKETPP_NOEXCEPT_TOKEN_=''"
+    WEBSOCKETPP_CPPFLAGS="$WEBSOCKETPP_CPPFLAGS -D_WEBSOCKETPP_NOEXCEPT_TOKEN_="
 fi
 
 AC_LANG_PUSH([C++])
