@@ -2,25 +2,36 @@
 #include "logger.hpp"
 #include "json.hpp"
 
-WAMPP::JSON::NodePtr myrpc(connection_hdl hdl,
-                           std::string callId,
-                           std::vector<WAMPP::JSON::NodePtr> args) {
+bool myrpc(connection_hdl hdl,
+           std::string callId,
+           std::vector<WAMPP::JSON::NodePtr> args,
+           WAMPP::JSON::NodePtr& result) {
+    
+    bool ret;
 
-    LOGGER_WRITE(Logger::DEBUG,"RPC Called with params:");
-    for(std::vector<int>::size_type i = 0; i != args.size(); i++) {
-        std::ostringstream oss;
-        oss << "#" << i << ":";
-        boost::apply_visitor(WAMPP::JSON::Serializer(oss),args[i]->data);
-        LOGGER_WRITE(Logger::DEBUG,oss.str());
+    LOGGER_WRITE(Logger::DEBUG,"RPC Called");
+
+    if (args.size()>0) {
+        LOGGER_WRITE(Logger::DEBUG,"Params:");
+        for(std::vector<int>::size_type i = 0; i != args.size(); i++) {
+            std::ostringstream oss;
+            oss << "#" << i << ":";
+            boost::apply_visitor(WAMPP::JSON::Serializer(oss),args[i]->data);
+            LOGGER_WRITE(Logger::DEBUG,oss.str());
+        }
+
+        result = WAMPP::JSON::NodePtr(new WAMPP::JSON::Node(string("OK")));
+        ret = true;
+    } else {
+        result = WAMPP::JSON::NodePtr(new WAMPP::JSON::Node(string("No parameters provided")));
+        ret = false;
     }
-
-    WAMPP::JSON::NodePtr result(new WAMPP::JSON::Node(string("OK")));
     std::ostringstream oss;
     boost::apply_visitor(WAMPP::JSON::Serializer(oss),result->data);
     LOGGER_WRITE(Logger::DEBUG,"Answering:");
     LOGGER_WRITE(Logger::DEBUG,oss.str());
 
-    return result;
+    return ret;
 }
 
 int main() {

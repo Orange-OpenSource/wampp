@@ -58,7 +58,7 @@ public:
     }
 };
 
-typedef ::function<JSON::NodePtr(connection_hdl,string,std::vector<JSON::NodePtr>)> RemoteProc;
+typedef ::function<bool(connection_hdl,string,std::vector<JSON::NodePtr>,JSON::NodePtr&)> RemoteProc;
 
 class Server {
 public:

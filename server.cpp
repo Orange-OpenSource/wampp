@@ -123,15 +123,27 @@ void Server::actions_loop() {
                         std::map<string,RemoteProc>::iterator it = m_rpcs.find(procURI);
                         if(it != m_rpcs.end()) {
                             // Call RPC
-                            JSON::NodePtr result = it->second(a.hdl,
-                                                          callID,
-                                                          ((Call *)wamp_msg)->args());
-                            if (result != NULL) {
+                            JSON::NodePtr result;
+                            if (it->second(a.hdl,
+                                           callID,
+                                           ((Call *)wamp_msg)->args(),
+                                           result)) {
                                 CallResult response(callID,result);
                                 send(a.hdl,&response);
+                            } else {
+                                CallError error(callID,
+                                                "wampp:call-error",
+                                                "The remote procedure call failed (see error details)",
+                                                result);
+                                send(a.hdl,&error);
                             }
                         } else {
-                            LOGGER_WRITE(Logger::ERROR,"No such method");
+                            JSON::NodePtr errorDetails(new JSON::Node(procURI));
+                            CallError error(callID,
+                                            "wampp:no-such-method",
+                                            "No such method",
+                                            errorDetails);
+                            send(a.hdl,&error);
                         }
                         break;
                     }
