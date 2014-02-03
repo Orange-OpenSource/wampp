@@ -9,8 +9,6 @@
 
 #include <rapidjson/document.h>
 
-#include "logger.hpp"
-
 namespace WAMPP {
 
 namespace JSON {

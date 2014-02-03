@@ -1,2 +1,2 @@
 #!/bin/sh
-aclocal && autoconf && automake --add-missing --foreign
+libtoolize && aclocal -I m4 && autoconf && automake --add-missing --foreign

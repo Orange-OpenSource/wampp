@@ -1,0 +1,17 @@
+bin_PROGRAMS = wampp			
+
+ACLOCAL_AMFLAGS = -I ../m4
+
+wampp_SOURCES = main.cpp
+
+wampp_CPPFLAGS = -I../lib \
+				 $(WEBSOCKETPP_CPPFLAGS) \
+				 $(BOOST_CPPFLAGS) \
+				 $(BOOST_SYSTEM_CPPFLAGS) \
+				 $(BOOST_ASIO_CPPFLAGS) \
+				 $(RAPIDJSON_CPPFLAGS)\
+				 -DENABLE_LOGGER
+
+wampp_LDADD = ../lib/libwampp-@LIBWAMPP_API_VERSION@.la $(BOOST_SYSTEM_LIB)
+
+RAPIDJSON_CPPFLAGS = -I$(RAPIDJSON_PATH)

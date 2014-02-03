@@ -1,8 +1,16 @@
-AC_INIT([WAMPP], 1.0)
+AC_INIT([LIBWAMPP], 1.0)
 AM_INIT_AUTOMAKE
 AC_PROG_CXX
+LT_INIT
+
+AC_SUBST([LIBWAMPP_SO_VERSION], [1:0:0])
+AC_SUBST([LIBWAMPP_API_VERSION], [1.0])
 
 AC_CONFIG_MACRO_DIR([m4])
+
+## 
+## Check LIBWAMPP Prerequisites
+##
 
 dnl Add environment variables to specify dependency paths
 AC_ARG_VAR([BOOST_PATH],[Path to Boost libraries])
@@ -109,5 +117,12 @@ AC_CHECK_HEADERS([rapidjson/document.h], [],
     [AC_MSG_ERROR(You need the rapidJSON library.)])
 AC_LANG_POP([C++])
 
-AC_CONFIG_FILES(Makefile)
+##
+## Generate Output Files
+##
+
+AC_CONFIG_FILES(Makefile
+                lib/Makefile
+                lib/libwampp-${LIBWAMPP_API_VERSION}.pc:lib/libwampp.pc.in
+                examples/Makefile)
 AC_OUTPUT
