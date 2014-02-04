@@ -16,16 +16,10 @@ libwampp_@LIBWAMPP_API_VERSION@_la_SOURCES = server.cpp   \
 libwampp_@LIBWAMPP_API_VERSION@_la_includedir = \
 	$(includedir)/wampp-@LIBWAMPP_API_VERSION@
 libwampp_@LIBWAMPP_API_VERSION@_la_include_HEADERS = server.hpp \
-							  					  json.hpp
+							  					     json.hpp
 
-libwampp_@LIBWAMPP_API_VERSION@_la_CPPFLAGS = $(WEBSOCKETPP_CPPFLAGS) \
-				 							  $(BOOST_CPPFLAGS) \
-				 						      $(BOOST_SYSTEM_CPPFLAGS) \
-				 						      $(BOOST_ASIO_CPPFLAGS) \
-				 						      $(RAPIDJSON_CPPFLAGS)\
+libwampp_@LIBWAMPP_API_VERSION@_la_CPPFLAGS = $(LIBWAMPP_CPPFLAGS) \
 				 						      -DENABLE_LOGGER
-
-RAPIDJSON_CPPFLAGS = -I$(RAPIDJSON_PATH)
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libwampp-$(LIBWAMPP_API_VERSION).pc

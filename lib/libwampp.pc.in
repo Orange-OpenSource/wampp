@@ -7,5 +7,5 @@ Name: @PACKAGE_NAME@
 Description: WAMP C++ library.
 Version: @PACKAGE_VERSION@
 URL: @PACKAGE_URL@
-Libs: -L${libdir} -lwampp-@LIBWAMPP_API_VERSION@ @BOOST_SYSTEM_LIB@
+Libs: -L${libdir} -lwampp-@LIBWAMPP_API_VERSION@ @LIBWAMPP_LIBS@
 Cflags: -I${includedir}/wampp-@LIBWAMPP_API_VERSION@
