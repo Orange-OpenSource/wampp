@@ -2,12 +2,83 @@
 
 #include "rapidjson/document.h"
 
+#include "json.hpp"
 #include "parser.hpp"
 #include "logger.hpp"
 
 using std::string;
 
 namespace WAMPP {
+
+using JSON::Node;
+using JSON::NodePtr;
+
+NodePtr createNode(const rapidjson::Value &val) {
+    NodePtr result;
+    switch(val.GetType()) {
+        case rapidjson::kNullType:
+        {
+            result = NodePtr(new Node(JSON::Null()));
+            break;
+        }
+        case rapidjson::kFalseType:
+        {
+            result = NodePtr(new Node(false));
+            break;
+        }
+        case rapidjson::kTrueType:
+        {
+            result = NodePtr(new Node(true));
+            break;
+        }
+        case rapidjson::kObjectType:
+        {
+            result = NodePtr(new Node());
+            result->data = JSON::Object();
+            rapidjson::Value::ConstMemberIterator itr;
+            for (itr = val.MemberBegin(); itr != val.MemberEnd(); ++itr) {
+                NodePtr pChild = createNode(itr->value);
+                boost::get<JSON::Object>(result->data).insert(
+                    std::make_pair(itr->name.GetString(), pChild));
+            }
+            break;
+        }
+        case rapidjson::kArrayType:
+        {
+            result = NodePtr(new Node());
+            result->data = JSON::Array();
+            rapidjson::Value::ConstValueIterator itr;
+            for (itr = val.Begin(); itr != val.End(); ++itr) {
+                NodePtr pChild = createNode(*itr);
+                boost::get<JSON::Array>(result->data).push_back(pChild);
+            }
+            break;
+        }
+        case rapidjson::kStringType:
+        {
+            result = NodePtr(new Node(std::string(val.GetString())));
+            break;
+        }
+        case rapidjson::kNumberType:
+        {
+            if (val.IsInt())
+                result = NodePtr(new Node(val.GetInt()));
+            else if (val.IsUint())
+                result = NodePtr(new Node(val.GetUint()));
+            else if (val.IsInt64())
+                result = NodePtr(new Node(val.GetInt64()));
+            else if (val.IsUint64())
+                result = NodePtr(new Node(val.GetUint64()));
+            else result = NodePtr(new Node(val.GetDouble()));
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+    return result;
+}
 
 Message* parseMessage(const string& buffer) {
 
@@ -66,7 +137,7 @@ Message* parseMessage(const string& buffer) {
                     string procURI(d[2].GetString());
                     std::vector<JSON::NodePtr> args;
                     for (unsigned int i=3; i<d.Size();i++) {
-                        JSON::NodePtr arg(new JSON::Node(d[i]));
+                        JSON::NodePtr arg = createNode(d[i]);
                         args.push_back(arg);
                     }
                     result = new Call(callID,procURI,args);
@@ -77,7 +148,7 @@ Message* parseMessage(const string& buffer) {
             if (3 == nargs) {
                 if (d[1].IsString()) {
                     string callID(d[1].GetString());
-                    JSON::NodePtr event(new JSON::Node(d[2]));
+                    JSON::NodePtr event = createNode(d[2]);
                     result = new CallResult(callID,event);
                 }
             }
@@ -89,7 +160,7 @@ Message* parseMessage(const string& buffer) {
                     string errorURI(d[2].GetString());
                     string errorDesc(d[3].GetString());
                     if (5 == nargs) {
-                        JSON::NodePtr errorDetails(new JSON::Node(d[4]));
+                        JSON::NodePtr errorDetails = createNode(d[4]);
                         result = new CallError(callID,
                                                errorURI,
                                                errorDesc,
@@ -122,7 +193,7 @@ Message* parseMessage(const string& buffer) {
             if (3 == nargs) {
                 if (d[1].IsString()) {
                     string topicURI(d[1].GetString());
-                    JSON::NodePtr event(new JSON::Node(d[2]));
+                    JSON::NodePtr event = createNode(d[2]);
                     result = new Publish(topicURI,event);
                 }
             }
@@ -131,7 +202,7 @@ Message* parseMessage(const string& buffer) {
             if (3 == nargs) {
                 if (d[1].IsString()) {
                     string topicURI(d[1].GetString());
-                    JSON::NodePtr event(new JSON::Node(d[2]));
+                    JSON::NodePtr event = createNode(d[2]);
                     result = new Event(topicURI,event);
                 }
             }

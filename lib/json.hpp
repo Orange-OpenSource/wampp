@@ -7,8 +7,6 @@
 #include <boost/variant.hpp>
 #include <boost/shared_ptr.hpp>
 
-#include <rapidjson/document.h>
-
 namespace WAMPP {
 
 namespace JSON {
@@ -37,7 +35,6 @@ typedef boost::variant<
 
 struct Node {
     Node() {}
-    Node(const rapidjson::Value &val);
 
     Node(bool b): data(b) {}
     Node(int i): data(i) {}
@@ -45,6 +42,7 @@ struct Node {
     Node(int64_t i): data(i) {}
     Node(uint64_t ui): data(ui) {}
     Node(double d): data(d) {}
+    Node(Null n): data(n) {}
     Node(std::string s): data(s) {}
 
     Value data;

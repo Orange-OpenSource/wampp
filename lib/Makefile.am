@@ -3,7 +3,6 @@ lib_LTLIBRARIES = libwampp-@LIBWAMPP_API_VERSION@.la
 ACLOCAL_AMFLAGS = -I ../m4
 
 libwampp_@LIBWAMPP_API_VERSION@_la_SOURCES = server.cpp   \
-					  						 json.cpp     \
 					  						 protocol.hpp \
 					  						 protocol.cpp \
 					  						 parser.hpp   \

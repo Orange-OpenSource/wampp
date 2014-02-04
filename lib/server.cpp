@@ -1,3 +1,9 @@
+#include <websocketpp/config/asio_no_tls.hpp>
+
+#include <websocketpp/server.hpp>
+
+#include <websocketpp/common/thread.hpp>
+
 #include "logger.hpp"
 #include "protocol.hpp"
 #include "parser.hpp"
@@ -16,27 +22,95 @@ using websocketpp::lib::condition_variable;
 
 namespace WAMPP {
 
-Server::Server(const string& ident):
+typedef websocketpp::server<websocketpp::config::asio> WSServer;
+
+enum action_type {
+    OPEN,
+    CLOSE,
+    MESSAGE
+};
+
+struct action {
+    action(action_type t,
+           connection_hdl h) : type(t), hdl(h) {}
+    action(action_type t,
+           connection_hdl h,
+           WSServer::message_ptr m) : type(t), hdl(h), msg(m) {}
+
+    action_type type;
+    connection_hdl hdl;
+    WSServer::message_ptr msg;
+};
+
+typedef std::pair<string,connection_hdl> Session;
+
+class SessionComparator
+{
+public:
+    bool operator()(const std::pair<std::string,connection_hdl>& a,
+                    const std::pair<std::string,connection_hdl>& b) const {
+        return std::owner_less<connection_hdl>()(a.second,b.second);
+    }
+};
+
+class ServerImpl: public Server {
+public:
+    ServerImpl(const string& ident);
+    ~ServerImpl();
+
+    void run(uint16_t port);
+    void addRPC(string uri, RemoteProc rpc);
+
+    void on_open(connection_hdl hdl);
+    void on_close(connection_hdl hdl);
+    void on_message(connection_hdl hdl, WSServer::message_ptr msg);
+
+    void actions_loop();
+
+private:
+    WSServer m_server;
+
+    shared_ptr<thread> m_actions_thread;
+    
+    std::set<Session,SessionComparator> m_sessions;
+    std::queue<action> m_actions;
+    std::map<string,RemoteProc> m_rpcs; 
+
+    mutex m_action_lock;
+    mutex m_session_lock;
+    mutex m_rpc_lock;
+    condition_variable m_action_cond;
+
+    void send(connection_hdl hdl, Message* msg);
+    
+    const string m_ident;    
+};
+
+Server* Server::create(const std::string& ident) {
+    return new ServerImpl(ident);
+}
+
+ServerImpl::ServerImpl(const string& ident):
     m_ident(ident) {
     // Initialize Asio Transport
     m_server.init_asio();
 
     // Register handler callbacks
-    m_server.set_open_handler(bind(&Server::on_open,this,::_1));
-    m_server.set_close_handler(bind(&Server::on_close,this,::_1));
-    m_server.set_message_handler(bind(&Server::on_message,this,::_1,::_2));
+    m_server.set_open_handler(bind(&ServerImpl::on_open,this,::_1));
+    m_server.set_close_handler(bind(&ServerImpl::on_close,this,::_1));
+    m_server.set_message_handler(bind(&ServerImpl::on_message,this,::_1,::_2));
 
     // Start a thread to run the processing loop
-    m_actions_thread.reset(new thread(bind(&Server::actions_loop,this)));
+    m_actions_thread.reset(new thread(bind(&ServerImpl::actions_loop,this)));
 }
 
-Server::~Server() {
+ServerImpl::~ServerImpl() {
     // Terminate the actions thread
     m_actions_thread->join();
 }
 
 // Run the asio loop (called from main thread)
-void Server::run(uint16_t port) {
+void ServerImpl::run(uint16_t port) {
     // listen on specified port
     m_server.listen(port);
 
@@ -55,7 +129,7 @@ void Server::run(uint16_t port) {
     }
 }
 
-void Server::on_open(connection_hdl hdl) {
+void ServerImpl::on_open(connection_hdl hdl) {
     unique_lock<mutex> lock(m_action_lock);
     LOGGER_WRITE(Logger::DEBUG,"on_open");
     m_actions.push(action(OPEN,hdl));
@@ -63,7 +137,7 @@ void Server::on_open(connection_hdl hdl) {
     m_action_cond.notify_one(); 
 }
 
-void Server::on_close(connection_hdl hdl) {
+void ServerImpl::on_close(connection_hdl hdl) {
     unique_lock<mutex> lock(m_action_lock);
     LOGGER_WRITE(Logger::DEBUG,"on_close");
     m_actions.push(action(CLOSE,hdl));
@@ -71,7 +145,7 @@ void Server::on_close(connection_hdl hdl) {
     m_action_cond.notify_one();
 }
 
-void Server::on_message(connection_hdl hdl, WSServer::message_ptr msg) {
+void ServerImpl::on_message(connection_hdl hdl, WSServer::message_ptr msg) {
     // queue message up for sending by processing thread
     unique_lock<mutex> lock(m_action_lock);
     LOGGER_WRITE(Logger::DEBUG,"on_message");
@@ -80,7 +154,7 @@ void Server::on_message(connection_hdl hdl, WSServer::message_ptr msg) {
     m_action_cond.notify_one();
 }
 
-void Server::actions_loop() {
+void ServerImpl::actions_loop() {
     while(1) {
         unique_lock<mutex> lock(m_action_lock);
 
@@ -124,8 +198,7 @@ void Server::actions_loop() {
                         if(it != m_rpcs.end()) {
                             // Call RPC
                             JSON::NodePtr result;
-                            if (it->second(a.hdl,
-                                           callID,
+                            if (it->second(callID,
                                            ((Call *)wamp_msg)->args(),
                                            result)) {
                                 CallResult response(callID,result);
@@ -158,13 +231,13 @@ void Server::actions_loop() {
     }
 }
 
-void Server::send(connection_hdl hdl, Message* msg) {
+void ServerImpl::send(connection_hdl hdl, Message* msg) {
     std::ostringstream oss;
     msg->serialize(oss);
     m_server.send(hdl,oss.str(),websocketpp::frame::opcode::text);
 }
 
-void Server::addRPC(string uri, RemoteProc rpc) {
+void ServerImpl::addRPC(string uri, RemoteProc rpc) {
     unique_lock<mutex> lock(m_rpc_lock);
     m_rpcs.insert(std::make_pair(uri,rpc));
 }

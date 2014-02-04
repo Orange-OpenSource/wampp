@@ -2,8 +2,7 @@
 #include "logger.hpp"
 #include "json.hpp"
 
-bool myrpc(connection_hdl hdl,
-           std::string callId,
+bool myrpc(std::string callId,
            std::vector<WAMPP::JSON::NodePtr> args,
            WAMPP::JSON::NodePtr& result) {
     
@@ -39,13 +38,15 @@ int main() {
     LOGGER_START(Logger::DEBUG, "")
     try {
 
-        WAMPP::Server server("WAMPP Server 1.0");
+        WAMPP::Server* server = WAMPP::Server::create("WAMPP Server 1.0");
 
         // Register RPC cp
-        server.addRPC("test",&myrpc);
+        server->addRPC("test",&myrpc);
 
         // Start the server
-        server.run(9002);
+        server->run(9002);
+
+        delete server;
 
     } catch (std::exception & e) {
         LOGGER_WRITE(Logger::ERROR, e.what())
