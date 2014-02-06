@@ -59,7 +59,7 @@ public:
     ~ServerImpl();
 
     void run(uint16_t port);
-    void addRPC(string uri, RemoteProc rpc);
+    void addRPC(string uri, RemoteProc *rpc);
 
     void on_open(connection_hdl hdl);
     void on_close(connection_hdl hdl);
@@ -74,7 +74,7 @@ private:
     
     std::set<Session,SessionComparator> m_sessions;
     std::queue<action> m_actions;
-    std::map<string,RemoteProc> m_rpcs; 
+    std::map<string,RemoteProc*> m_rpcs; 
 
     mutex m_action_lock;
     mutex m_session_lock;
@@ -194,13 +194,13 @@ void ServerImpl::actions_loop() {
                         string callID = ((Call *)wamp_msg)->callID();
                         string procURI = ((Call *)wamp_msg)->procURI();
                         unique_lock<mutex> lock(m_rpc_lock);
-                        std::map<string,RemoteProc>::iterator it = m_rpcs.find(procURI);
+                        std::map<string,RemoteProc*>::iterator it = m_rpcs.find(procURI);
                         if(it != m_rpcs.end()) {
                             // Call RPC
                             JSON::NodePtr result;
-                            if (it->second(callID,
-                                           ((Call *)wamp_msg)->args(),
-                                           result)) {
+                            if (it->second->invoke(callID,
+                                                   ((Call *)wamp_msg)->args(),
+                                                   result)) {
                                 CallResult response(callID,result);
                                 send(a.hdl,&response);
                             } else {
@@ -237,7 +237,7 @@ void ServerImpl::send(connection_hdl hdl, Message* msg) {
     m_server.send(hdl,oss.str(),websocketpp::frame::opcode::text);
 }
 
-void ServerImpl::addRPC(string uri, RemoteProc rpc) {
+void ServerImpl::addRPC(string uri, RemoteProc* rpc) {
     unique_lock<mutex> lock(m_rpc_lock);
     m_rpcs.insert(std::make_pair(uri,rpc));
 }

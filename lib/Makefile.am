@@ -15,7 +15,8 @@ libwampp_@LIBWAMPP_API_VERSION@_la_SOURCES = server.cpp   \
 libwampp_@LIBWAMPP_API_VERSION@_la_includedir = \
 	$(includedir)/wampp-@LIBWAMPP_API_VERSION@
 libwampp_@LIBWAMPP_API_VERSION@_la_include_HEADERS = server.hpp \
-							  					     json.hpp
+							  					     json.hpp   \
+							  					     rpc.hpp
 
 libwampp_@LIBWAMPP_API_VERSION@_la_CPPFLAGS = $(LIBWAMPP_CPPFLAGS) \
 				 						      -DENABLE_LOGGER

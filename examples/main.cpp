@@ -2,7 +2,10 @@
 #include "logger.hpp"
 #include "json.hpp"
 
-bool myrpc(std::string callId,
+class MyRemoteProc: public WAMPP::RemoteProc
+{
+
+bool invoke(std::string callId,
            std::vector<WAMPP::JSON::NodePtr> args,
            WAMPP::JSON::NodePtr& result) {
     
@@ -32,6 +35,7 @@ bool myrpc(std::string callId,
 
     return ret;
 }
+};
 
 int main() {
     // Log everything to stdout
@@ -40,7 +44,8 @@ int main() {
 
         WAMPP::Server* server = WAMPP::Server::create("WAMPP Server 1.0");
 
-        // Register RPC cp
+        // Register RPC cb
+        MyRemoteProc myrpc;
         server->addRPC("test",&myrpc);
 
         // Start the server
