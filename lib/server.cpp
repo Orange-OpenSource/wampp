@@ -61,6 +61,7 @@ public:
     void run(uint16_t port);
     void addRPC(string uri, RemoteProc *rpc);
 
+    bool on_validate(connection_hdl hdl);
     void on_open(connection_hdl hdl);
     void on_close(connection_hdl hdl);
     void on_message(connection_hdl hdl, WSServer::message_ptr msg);
@@ -96,6 +97,7 @@ ServerImpl::ServerImpl(const string& ident):
     m_server.init_asio();
 
     // Register handler callbacks
+    m_server.set_validate_handler(bind(&ServerImpl::on_validate,this,::_1));
     m_server.set_open_handler(bind(&ServerImpl::on_open,this,::_1));
     m_server.set_close_handler(bind(&ServerImpl::on_close,this,::_1));
     m_server.set_message_handler(bind(&ServerImpl::on_message,this,::_1,::_2));
@@ -127,6 +129,29 @@ void ServerImpl::run(uint16_t port) {
     } catch (...) {
         LOGGER_WRITE(Logger::DEBUG,"other exception");
     }
+}
+
+bool ServerImpl::on_validate(connection_hdl hdl) {
+
+    bool result = false;
+
+    WSServer::connection_ptr con = m_server.get_con_from_hdl(hdl);
+
+    const std::vector<std::string> & subp_requests = con->get_requested_subprotocols();
+    std::vector<std::string>::const_iterator it;
+
+    LOGGER_WRITE(Logger::DEBUG,"Requested protocols:");
+    for (it = subp_requests.begin(); it != subp_requests.end(); ++it) {
+        std::string subprotocol = std::string(*it);
+        LOGGER_WRITE(Logger::DEBUG,subprotocol);
+        if (subprotocol == "wamp") {
+            con->select_subprotocol("wamp");
+            LOGGER_WRITE(Logger::DEBUG,"Selecting WAMP subprotocol");
+            result = true;
+        }
+    }
+
+    return result;
 }
 
 void ServerImpl::on_open(connection_hdl hdl) {
