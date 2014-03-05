@@ -42,7 +42,12 @@ struct action {
     WSServer::message_ptr msg;
 };
 
-typedef std::set<connection_hdl,std::owner_less<connection_hdl>> SessionSet;
+typedef std::set<connection_hdl,std::owner_less<connection_hdl>> ConnList;
+
+struct SessionSet {
+    mutex m_lock;
+    ConnList m_cnxs;
+};
 
 class ServerImpl: public Server {
 public:
@@ -83,7 +88,6 @@ private:
     // 3. The mutex is unlocked when the lock goes out of scope
     // }
     mutex m_action_lock;
-    mutex m_session_lock;
     mutex m_rpc_lock;
     mutex m_topics_lock;
     condition_variable m_action_cond;
@@ -200,14 +204,14 @@ void ServerImpl::actions_loop() {
         if (a.type == OPEN) {
             string sessionId = genRandomId(16);
             Welcome welcome(sessionId,WAMPP_PROTOCOL_VERSION,m_ident);
-            unique_lock<mutex> lock(m_session_lock);
-            m_sessions.insert(a.hdl);
+            unique_lock<mutex> sesslock(m_sessions.m_lock);
+            m_sessions.m_cnxs.insert(a.hdl);
             send(a.hdl,&welcome);
         } else if (a.type == CLOSE) {
-            unique_lock<mutex> lock(m_session_lock);
-            m_sessions.erase(a.hdl);
+            unique_lock<mutex> sesslock(m_sessions.m_lock);
+            m_sessions.m_cnxs.erase(a.hdl);
         } else if (a.type == MESSAGE) {
-            unique_lock<mutex> lock(m_session_lock);
+            unique_lock<mutex> sesslock(m_sessions.m_lock);
             Message* wamp_msg = parseMessage(a.msg->get_payload());
             if (wamp_msg) {
                 switch (wamp_msg->getType()) {
@@ -224,7 +228,7 @@ void ServerImpl::actions_loop() {
                     {
                         string callID = ((Call *)wamp_msg)->callID();
                         string procURI = ((Call *)wamp_msg)->procURI();
-                        unique_lock<mutex> lock(m_rpc_lock);
+                        unique_lock<mutex> rpclock(m_rpc_lock);
                         std::map<string,RemoteProc*>::iterator it = m_rpcs.find(procURI);
                         if(it != m_rpcs.end()) {
                             // Call RPC
@@ -254,16 +258,17 @@ void ServerImpl::actions_loop() {
                     case SUBSCRIBE:
                     {
                         string topicURI = ((Subscribe *)wamp_msg)->topicURI();
-                        unique_lock<mutex> lock(m_topics_lock);
+                        unique_lock<mutex> topicslock(m_topics_lock);
                         std::map<string,SessionSet*>::iterator it = m_topics.find(topicURI);
                         SessionSet* subscribers;
                         if (it == m_topics.end()) {
-                            SessionSet* subscribers = new SessionSet();
+                            subscribers = new SessionSet();
                             m_topics.insert(std::make_pair(topicURI,subscribers));
                         } else {
                             subscribers = it->second;
                         }
-                        subscribers->insert(a.hdl);
+                        unique_lock<mutex> subslock(subscribers->m_lock);
+                        subscribers->m_cnxs.insert(a.hdl);
                         break;
                     }
                     case UNSUBSCRIBE:
@@ -273,8 +278,9 @@ void ServerImpl::actions_loop() {
                         std::map<string,SessionSet*>::iterator it = m_topics.find(topicURI);
                         if (it != m_topics.end()) {
                             SessionSet* subscribers = it->second;
-                            subscribers->erase(a.hdl);
-                            if (subscribers->empty()) {
+                            unique_lock<mutex> subslock(subscribers->m_lock);
+                            subscribers->m_cnxs.erase(a.hdl);
+                            if (subscribers->m_cnxs.empty()) {
                                 m_topics.erase(it);
                                 delete(subscribers);
                             }
