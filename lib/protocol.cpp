@@ -141,8 +141,16 @@ Subscribe::Subscribe(const string& topicURI): Message(SUBSCRIBE) {
     appendString(topicURI);
 }
 
+const string& Subscribe::topicURI() const{
+    return getString(1);
+}
+
 UnSubscribe::UnSubscribe(const string& topicURI): Message(UNSUBSCRIBE) {
     appendString(topicURI);
+}
+
+const string& UnSubscribe::topicURI() const{
+    return getString(1);
 }
 
 Publish::Publish(const string& topicURI,

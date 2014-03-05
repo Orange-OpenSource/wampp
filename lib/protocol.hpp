@@ -97,13 +97,13 @@ public:
 class Subscribe: public Message {
 public:
     Subscribe(const string& topicURI);
-    const string& topicURI();
+    const string& topicURI() const;
 };
 
 class UnSubscribe: public Message {
 public:
     UnSubscribe(const string& topicURI);
-    const string& topicURI();
+    const string& topicURI() const;
 };
 
 class Publish: public Message {
