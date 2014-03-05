@@ -42,16 +42,7 @@ struct action {
     WSServer::message_ptr msg;
 };
 
-typedef std::pair<string,connection_hdl> Session;
-
-class SessionComparator
-{
-public:
-    bool operator()(const std::pair<std::string,connection_hdl>& a,
-                    const std::pair<std::string,connection_hdl>& b) const {
-        return std::owner_less<connection_hdl>()(a.second,b.second);
-    }
-};
+typedef std::set<connection_hdl,std::owner_less<connection_hdl>> SessionSet;
 
 class ServerImpl: public Server {
 public:
@@ -73,13 +64,28 @@ private:
 
     shared_ptr<thread> m_actions_thread;
     
-    std::set<Session,SessionComparator> m_sessions;
+    SessionSet m_sessions;
     std::queue<action> m_actions;
     std::map<string,RemoteProc*> m_rpcs; 
+    std::map<string,SessionSet*> m_topics;
 
+    // Concurrent read/write access to the Server internal lists
+    // is protected by a set of mutexes defined below.
+    // The same pattern is used whenever a member requests access
+    // to one of them.
+    // 1. A lock is acquired at the block level by instantiating a
+    // std::unique_lock:
+    // {
+    //     unique_lock<mutex> lock(m_action_lock);
+    // (This call blocks until the mutex is available)
+    // 2. The required operations are performed
+    //     ...
+    // 3. The mutex is unlocked when the lock goes out of scope
+    // }
     mutex m_action_lock;
     mutex m_session_lock;
     mutex m_rpc_lock;
+    mutex m_topics_lock;
     condition_variable m_action_cond;
 
     void send(connection_hdl hdl, Message* msg);
@@ -195,11 +201,11 @@ void ServerImpl::actions_loop() {
             string sessionId = genRandomId(16);
             Welcome welcome(sessionId,WAMPP_PROTOCOL_VERSION,m_ident);
             unique_lock<mutex> lock(m_session_lock);
-            m_sessions.insert(std::make_pair(sessionId,a.hdl));
+            m_sessions.insert(a.hdl);
             send(a.hdl,&welcome);
         } else if (a.type == CLOSE) {
             unique_lock<mutex> lock(m_session_lock);
-            m_sessions.erase(std::make_pair("",a.hdl));
+            m_sessions.erase(a.hdl);
         } else if (a.type == MESSAGE) {
             unique_lock<mutex> lock(m_session_lock);
             Message* wamp_msg = parseMessage(a.msg->get_payload());
@@ -244,6 +250,35 @@ void ServerImpl::actions_loop() {
                             send(a.hdl,&error);
                         }
                         break;
+                    }
+                    case SUBSCRIBE:
+                    {
+                        string topicURI = ((Subscribe *)wamp_msg)->topicURI();
+                        unique_lock<mutex> lock(m_topics_lock);
+                        std::map<string,SessionSet*>::iterator it = m_topics.find(topicURI);
+                        SessionSet* subscribers;
+                        if (it == m_topics.end()) {
+                            SessionSet* subscribers = new SessionSet();
+                            m_topics.insert(std::make_pair(topicURI,subscribers));
+                        } else {
+                            subscribers = it->second;
+                        }
+                        subscribers->insert(a.hdl);
+                        break;
+                    }
+                    case UNSUBSCRIBE:
+                    {
+                        string topicURI = ((UnSubscribe *)wamp_msg)->topicURI();
+                        unique_lock<mutex> lock(m_topics_lock);
+                        std::map<string,SessionSet*>::iterator it = m_topics.find(topicURI);
+                        if (it != m_topics.end()) {
+                            SessionSet* subscribers = it->second;
+                            subscribers->erase(a.hdl);
+                            if (subscribers->empty()) {
+                                m_topics.erase(it);
+                                delete(subscribers);
+                            }
+                        }
                     }
                     default:
                         break;
