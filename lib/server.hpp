@@ -15,6 +15,7 @@ public:
     virtual ~Server() {};
     virtual void run(uint16_t port) = 0;
     virtual void addRPC(string uri, RemoteProc *rpc) = 0;
+    virtual void publish(string topic, JSON::NodePtr event) = 0;
 protected:
     Server() {};
     Server(const Server& rhs) {};

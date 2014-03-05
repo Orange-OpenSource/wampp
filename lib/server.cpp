@@ -56,6 +56,7 @@ public:
 
     void run(uint16_t port);
     void addRPC(string uri, RemoteProc *rpc);
+    void publish(string topic, JSON::NodePtr event); 
 
     bool on_validate(connection_hdl hdl);
     void on_open(connection_hdl hdl);
@@ -209,6 +210,7 @@ void ServerImpl::actions_loop() {
             send(a.hdl,&welcome);
         } else if (a.type == CLOSE) {
             unique_lock<mutex> sesslock(m_sessions.m_lock);
+            // TODO: terminate pending subscriptions
             m_sessions.m_cnxs.erase(a.hdl);
         } else if (a.type == MESSAGE) {
             unique_lock<mutex> sesslock(m_sessions.m_lock);
@@ -306,6 +308,20 @@ void ServerImpl::send(connection_hdl hdl, Message* msg) {
 void ServerImpl::addRPC(string uri, RemoteProc* rpc) {
     unique_lock<mutex> lock(m_rpc_lock);
     m_rpcs.insert(std::make_pair(uri,rpc));
+}
+
+void ServerImpl::publish(string topicURI, JSON::NodePtr evt) {
+    unique_lock<mutex> lock(m_topics_lock);
+    std::map<string,SessionSet*>::iterator it = m_topics.find(topicURI);
+    if (it != m_topics.end()) {
+        Event msg(topicURI,evt);
+        SessionSet* subscribers = it->second;
+        unique_lock<mutex> subslock(subscribers->m_lock);
+        for (ConnList::iterator it = subscribers->m_cnxs.begin();
+             it != subscribers->m_cnxs.end(); it++) {
+            send(*it,&msg);
+        }
+    }
 }
 
 } // namespace WAMPP
