@@ -2,6 +2,8 @@
 #include "logger.hpp"
 #include "json.hpp"
 
+#include <thread>
+
 class MyRemoteProc: public WAMPP::RemoteProc
 {
 
@@ -37,6 +39,31 @@ bool invoke(std::string callId,
 }
 };
 
+std::string getFmtTime() {
+
+    std::time_t rawtime;
+    std::tm* timeinfo;
+    char buffer [80];
+
+    std::time(&rawtime);
+    timeinfo = std::localtime(&rawtime);
+
+    std::strftime(buffer,80,"%Y-%m-%d-%H-%M-%S",timeinfo);
+
+    return std::string(buffer);
+
+}
+
+
+void eventLoop(WAMPP::Server* server) {
+    while(1) {
+        // send an event every 5 seconds
+        sleep(5);
+        WAMPP::JSON::NodePtr event = WAMPP::JSON::NodePtr(new WAMPP::JSON::Node(getFmtTime()));
+        server->publish("foo",event);
+    }
+}
+
 int main() {
     // Log everything to stdout
     LOGGER_START(Logger::DEBUG, "")
@@ -48,9 +75,13 @@ int main() {
         MyRemoteProc myrpc;
         server->addRPC("test",&myrpc);
 
+        // Start a thread to generate events
+        std::thread eventThread(eventLoop,server);
+
         // Start the server
         server->run(9002);
 
+        eventThread.join();
         delete server;
 
     } catch (std::exception & e) {
