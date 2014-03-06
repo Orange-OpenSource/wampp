@@ -39,6 +39,16 @@ bool invoke(std::string callId,
 }
 };
 
+class MySubFilter : public WAMPP::SubFilter {
+    bool subscribe(string uri) {
+        LOGGER_WRITE(Logger::DEBUG,"Subscription Received");
+        return true;
+    }
+    void unsubscribe(string uri) {
+        LOGGER_WRITE(Logger::DEBUG,"Unsubscription Received");
+    }
+};
+
 std::string getFmtTime() {
 
     std::time_t rawtime;
@@ -74,6 +84,10 @@ int main() {
         // Register RPC cb
         MyRemoteProc myrpc;
         server->addRPC("test",&myrpc);
+
+        // Register PubSub cb
+        MySubFilter mysub;
+        server->registerSubFilter(&mysub);
 
         // Start a thread to generate events
         std::thread eventThread(eventLoop,server);

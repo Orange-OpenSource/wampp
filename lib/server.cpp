@@ -86,6 +86,7 @@ public:
 
     void run(uint16_t port);
     void addRPC(string uri, RemoteProc *rpc);
+    void registerSubFilter(SubFilter *sub);
     void publish(string topic, JSON::NodePtr event); 
 
     bool on_validate(connection_hdl hdl);
@@ -127,6 +128,8 @@ private:
     void send(connection_hdl hdl, Message* msg);
     
     const string m_ident;    
+    
+    SubFilter* m_subFilter;
 };
 
 Server* Server::create(const std::string& ident) {
@@ -245,6 +248,9 @@ void ServerImpl::actions_loop() {
             std::pair<SubscriptionList::left_iterator,SubscriptionList::left_iterator> range = 
                 m_subscriptions.left.equal_range(a.hdl);
             for (SubscriptionList::left_iterator it = range.first;it != range.second; it++) {
+                if (m_subFilter) {
+                    m_subFilter->unsubscribe(it->second);
+                }
                 m_subscriptions.left.erase(it);
             }
             unique_lock<mutex> sesslock(m_sessions_lock);
@@ -297,17 +303,22 @@ void ServerImpl::actions_loop() {
                     case SUBSCRIBE:
                     {
                         string topicURI = ((Subscribe *)wamp_msg)->topicURI();
-                        unique_lock<mutex> subslock(m_subs_lock);
-                        SubscriptionList::value_type subscription(a.hdl,topicURI);
-                        if (m_subscriptions.find(subscription) == m_subscriptions.end()) {
-                            // We do not allow multiple subscriptions from the same session
-                            m_subscriptions.insert(SubscriptionList::value_type(a.hdl,topicURI));
+                        if (!m_subFilter || m_subFilter->subscribe(topicURI)) {
+                            unique_lock<mutex> subslock(m_subs_lock);
+                            SubscriptionList::value_type subscription(a.hdl,topicURI);
+                            if (m_subscriptions.find(subscription) == m_subscriptions.end()) {
+                                // We do not allow multiple subscriptions from the same session
+                                m_subscriptions.insert(SubscriptionList::value_type(a.hdl,topicURI));
+                            }
                         }
                         break;
                     }
                     case UNSUBSCRIBE:
                     {
                         string topicURI = ((UnSubscribe *)wamp_msg)->topicURI();
+                        if (m_subFilter) {
+                            m_subFilter->unsubscribe(topicURI);
+                        }
                         unique_lock<mutex> subslock(m_subs_lock);
                         m_subscriptions.erase(SubscriptionList::value_type(a.hdl,topicURI));
                     }
@@ -331,6 +342,10 @@ void ServerImpl::send(connection_hdl hdl, Message* msg) {
 void ServerImpl::addRPC(string uri, RemoteProc* rpc) {
     unique_lock<mutex> lock(m_rpc_lock);
     m_rpcs.insert(std::make_pair(uri,rpc));
+}
+
+void ServerImpl::registerSubFilter(SubFilter *sub) {
+    m_subFilter = sub;
 }
 
 void ServerImpl::publish(string topicURI, JSON::NodePtr evt) {

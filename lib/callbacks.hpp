@@ -14,6 +14,12 @@ public:
                         JSON::NodePtr& result) = 0; 
 };
 
+class SubFilter {
+public:
+    virtual bool subscribe(std::string uri) = 0;
+    virtual void unsubscribe(std::string uri) = 0;
+};
+
 } // namespace WAMPP
 
 #endif // WAMPP_RPC_HPP_
