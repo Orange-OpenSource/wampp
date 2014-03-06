@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<meta charset="utf-8">
+
+<title>WAMP Test</title>
+<meta name="description" content="">
+<meta name="author" content="David Corvoysier">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" href="style/style.css">
+
+</head>
+
+<body>
+
+<div id="container">
+
+    <div id="main-container">
+
+        <div id="main">
+
+            <h1>WAMP Test</h1>
+
+            <div id="wamp">
+                <div id="wamp-config">
+                    <strong>Location:</strong><br>
+                    <input value="ws://127.0.0.1:51045" disabled="disabled" id="wsUri" size="35">
+                    <br>
+                    <input disabled="disabled" id="secureCb" onclick="toggleTls();" type="checkbox">
+                    <span id="secureCbLabel" style="font-size: smaller; color: rgb(153, 153, 153);">Use secure WebSocket (TLS)</span><br>
+                    <button disabled="disabled" id="connect">Connect</button>
+                    <button id="disconnect">Disconnect</button>
+                    <br>
+                    <br>
+                    <strong>RPC Call:</strong><br>
+                    Proc URI: <input id="procURI" type="text" size="35">
+                    <br>
+                    <button id="addParam" class="wsButton" onclick="addParam();">Add Param</button>
+                    <button id="delParam" class="wsButton" onclick="delParam();">Remove Param</button>
+                    <button id="send" class="wsButton">Send</button>
+                    <strong>Pub/Sub:</strong><br>
+                    Topic URI: <input id="topicURI" type="text" size="35">
+                    <br>
+                    <button id="subscribe" class="wsButton">Subscribe</button>
+                    <button id="unsubscribe" class="wsButton">UnSubscribe</button>
+                </div>
+                <div id="wamp-log"> <strong>Log:</strong>
+                    <div id="consoleLog"></div>
+                    <button id="clearLogBut" style="position: relative; top: 3px;">Clear log</button>
+                </div>
+            </div>
+
+            <p><br><strong>Instructions:</strong></p>
+            <table class="instructions" cellpadding="2px" cellspacing="0px">
+                <tbody><tr>
+                    <td nowrap="nowrap" valign="top">Step 1: &nbsp;</td>
+                    <td valign="top">Enter your server URI and press the <strong>Connect</strong> button.</td>
+                </tr>
+                <tr>
+                    <td nowrap="nowrap" valign="top">Step 2: &nbsp;</td>
+                    <td valign="top">Once connected, you can <strong>Call</strong> a Remote Procedure or <strong>Subscribe/Unsubscribe</strong> to a specific event. The output will appear in the <strong>Log</strong> section.</td>
+                </tr>
+                <tr>
+                    <td nowrap="nowrap" valign="top">Step 3: &nbsp;</td>
+                    <td valign="top">Press the <strong>Disconnect</strong> button.</td>
+                </tr>
+                <tr>
+                    <td nowrap="nowrap" valign="top">Note: &nbsp;</td>
+                    <td valign="top">In some environments the WebSocket 
+                        connection may fail due to intermediary firewalls, proxies, routers, 
+                        etc. In that case take advantage of WebSocket's secure capability and 
+                        check<strong> Use secure WebSocket (TLS)</strong>. Even if you have no issues you can still feel free to test using a secure connection.</td>
+                </tr>
+            </tbody></table>
+
+        </div> <!-- #main -->
+
+    </div> <!-- #main-container -->
+
+</div> <!-- #container -->
+
+<script type="text/javascript" src="autobahn.min.js"></script>
+<script type="text/javascript" src="wamp.js"></script>
+<script language="javascript" type="text/javascript">
+
+function wsDetect()
+{
+    if (window.WebSocket)
+    {
+        wampTestInit();
+    }
+    else
+    {
+        alert("Your browser doesn't support WebSockets");
+    }
+}
+
+// Handle difference for IE.
+
+if (window.addEventListener)
+{
+    window.addEventListener("load", wsDetect, false);
+}
+else if (window.attachEvent)
+{
+    window.attachEvent("onload", wsDetect)    
+}
+
+</script>
+
+</body>
+</html>

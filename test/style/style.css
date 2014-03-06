@@ -1,0 +1,109 @@
+/*
+************************************************************
+ Primary Styles
+************************************************************
+*/
+
+html {
+    background-color: transparent;
+}
+
+body {
+    font:13px/1.231 sans-serif;
+    font-size:small;
+    background-color: transparent;
+}
+
+select, input, textarea, button { font:99% sans-serif; }
+
+body, select, input, textarea { 
+    color: #444;
+}
+
+h1 {
+	font-size: 200%;
+	color: #a44505;
+	padding: 22px 0 14px 0;
+}
+
+h2 {
+	padding: 10px 0 14px 0;
+	font-size: 150%;
+    color: #3b6f8f;
+}
+
+a:link, a:visited, a:active {color: #a44505; text-decoration: none;}
+a:hover {color: #a44505; text-decoration: underline;}
+
+#container {
+	margin: 0 auto;
+	width: 960px;
+}
+
+p.bodytext {
+	font-size: 15px;
+	line-height: 15px;
+	line-height: 125%;
+	color: #666;
+	padding-bottom: 10px;
+}
+
+#main-container {
+	float: left;
+	width: 760px;
+	background-color: white;
+}
+
+#main-container h1:first, nav h2 {
+	padding-top: 0px;
+}
+
+#consoleLog {
+	border: solid 1px #999999;
+	border-top-color: #CCCCCC;
+	border-left-color: #CCCCCC;
+	padding: 5px;
+  width: 100%;
+	height: 172px;
+	overflow-y: scroll;
+}
+
+#consoleLog p {
+  font-size: 11px;
+	line-height: 150%;
+}
+
+#wamp {
+    table-layout: fixed;
+    border-spacing: 1em;
+}
+
+#wamp > div {
+    display: table-cell;
+}
+
+#wamp-config {
+    min-width: 24em;
+}
+
+#wamp-log {
+    width: 30em;
+    max-width: 30em;
+}
+
+#wamp button {
+	margin-top: 5px;
+}
+
+.instructions {
+	width: 100%;
+  border-top: dotted 1px #DDDDDD;
+}
+
+.instructions td {
+  font-size: 12px; font-family: arial, helvetica, verdana, sans-serif; color: #666666;
+  border-bottom: dotted 1px #DDDDDD;
+	padding-top: 3px;
+	padding-bottom: 3px;
+	background-color: #FCFCFC;
+}
