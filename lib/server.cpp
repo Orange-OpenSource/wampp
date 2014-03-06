@@ -1,3 +1,6 @@
+#include <boost/bimap.hpp>
+#include <boost/bimap/multiset_of.hpp>
+
 #include <websocketpp/config/asio_no_tls.hpp>
 
 #include <websocketpp/server.hpp>
@@ -19,6 +22,8 @@ using websocketpp::lib::thread;
 using websocketpp::lib::mutex;
 using websocketpp::lib::unique_lock;
 using websocketpp::lib::condition_variable;
+
+using boost::bimap;
 
 namespace WAMPP {
 
@@ -44,10 +49,35 @@ struct action {
 
 typedef std::set<connection_hdl,std::owner_less<connection_hdl>> ConnList;
 
-struct SessionSet {
-    mutex m_lock;
-    ConnList m_cnxs;
+/**
+ * Subscriptions are stored in a complex container representing
+ * a many to many relationship between connection handles
+ * and subscription topics.
+ * The container relies on the boost::bimap to create a bidirectional
+ * link between two "left" and "right" std::multimap representing
+ * the one-to-many associations between handles and strings repsectively.
+ * A specific ordering function is provided that allows comparison between
+ * connection/topic pairs.
+ */
+
+template< class Rel >
+struct SubOrder
+{
+    bool operator()(Rel ra, Rel rb) const
+    {
+        bool result = std::owner_less<connection_hdl>()(ra.left,rb.left);
+        if (!result && !std::owner_less<connection_hdl>()(rb.left,ra.left)) {
+            // Connection handles are equal, compare topics
+            result = (ra.right < rb.right);
+        }
+        return result;
+    }
 };
+
+typedef boost::bimap< boost::bimaps::multiset_of<connection_hdl,std::owner_less<connection_hdl>>,
+                      boost::bimaps::multiset_of<string>,
+                      boost::bimaps::set_of_relation<SubOrder<boost::bimaps::_relation>>
+                    > SubscriptionList;
 
 class ServerImpl: public Server {
 public:
@@ -70,10 +100,10 @@ private:
 
     shared_ptr<thread> m_actions_thread;
     
-    SessionSet m_sessions;
+    ConnList m_sessions;
     std::queue<action> m_actions;
     std::map<string,RemoteProc*> m_rpcs; 
-    std::map<string,SessionSet*> m_topics;
+    SubscriptionList m_subscriptions;
 
     // Concurrent read/write access to the Server internal lists
     // is protected by a set of mutexes defined below.
@@ -89,8 +119,9 @@ private:
     // 3. The mutex is unlocked when the lock goes out of scope
     // }
     mutex m_action_lock;
+    mutex m_sessions_lock;
     mutex m_rpc_lock;
-    mutex m_topics_lock;
+    mutex m_subs_lock;
     condition_variable m_action_cond;
 
     void send(connection_hdl hdl, Message* msg);
@@ -205,15 +236,21 @@ void ServerImpl::actions_loop() {
         if (a.type == OPEN) {
             string sessionId = genRandomId(16);
             Welcome welcome(sessionId,WAMPP_PROTOCOL_VERSION,m_ident);
-            unique_lock<mutex> sesslock(m_sessions.m_lock);
-            m_sessions.m_cnxs.insert(a.hdl);
+            unique_lock<mutex> sesslock(m_sessions_lock);
+            m_sessions.insert(a.hdl);
             send(a.hdl,&welcome);
         } else if (a.type == CLOSE) {
-            unique_lock<mutex> sesslock(m_sessions.m_lock);
-            // TODO: terminate pending subscriptions
-            m_sessions.m_cnxs.erase(a.hdl);
+            // Cancel pending subscriptions
+            unique_lock<mutex> lock(m_subs_lock);
+            std::pair<SubscriptionList::left_iterator,SubscriptionList::left_iterator> range = 
+                m_subscriptions.left.equal_range(a.hdl);
+            for (SubscriptionList::left_iterator it = range.first;it != range.second; it++) {
+                m_subscriptions.left.erase(it);
+            }
+            unique_lock<mutex> sesslock(m_sessions_lock);
+            m_sessions.erase(a.hdl);
         } else if (a.type == MESSAGE) {
-            unique_lock<mutex> sesslock(m_sessions.m_lock);
+            unique_lock<mutex> sesslock(m_sessions_lock);
             Message* wamp_msg = parseMessage(a.msg->get_payload());
             if (wamp_msg) {
                 switch (wamp_msg->getType()) {
@@ -260,33 +297,19 @@ void ServerImpl::actions_loop() {
                     case SUBSCRIBE:
                     {
                         string topicURI = ((Subscribe *)wamp_msg)->topicURI();
-                        unique_lock<mutex> topicslock(m_topics_lock);
-                        std::map<string,SessionSet*>::iterator it = m_topics.find(topicURI);
-                        SessionSet* subscribers;
-                        if (it == m_topics.end()) {
-                            subscribers = new SessionSet();
-                            m_topics.insert(std::make_pair(topicURI,subscribers));
-                        } else {
-                            subscribers = it->second;
+                        unique_lock<mutex> subslock(m_subs_lock);
+                        SubscriptionList::value_type subscription(a.hdl,topicURI);
+                        if (m_subscriptions.find(subscription) == m_subscriptions.end()) {
+                            // We do not allow multiple subscriptions from the same session
+                            m_subscriptions.insert(SubscriptionList::value_type(a.hdl,topicURI));
                         }
-                        unique_lock<mutex> subslock(subscribers->m_lock);
-                        subscribers->m_cnxs.insert(a.hdl);
                         break;
                     }
                     case UNSUBSCRIBE:
                     {
                         string topicURI = ((UnSubscribe *)wamp_msg)->topicURI();
-                        unique_lock<mutex> lock(m_topics_lock);
-                        std::map<string,SessionSet*>::iterator it = m_topics.find(topicURI);
-                        if (it != m_topics.end()) {
-                            SessionSet* subscribers = it->second;
-                            unique_lock<mutex> subslock(subscribers->m_lock);
-                            subscribers->m_cnxs.erase(a.hdl);
-                            if (subscribers->m_cnxs.empty()) {
-                                m_topics.erase(it);
-                                delete(subscribers);
-                            }
-                        }
+                        unique_lock<mutex> subslock(m_subs_lock);
+                        m_subscriptions.erase(SubscriptionList::value_type(a.hdl,topicURI));
                     }
                     default:
                         break;
@@ -311,16 +334,14 @@ void ServerImpl::addRPC(string uri, RemoteProc* rpc) {
 }
 
 void ServerImpl::publish(string topicURI, JSON::NodePtr evt) {
-    unique_lock<mutex> lock(m_topics_lock);
-    std::map<string,SessionSet*>::iterator it = m_topics.find(topicURI);
-    if (it != m_topics.end()) {
+    unique_lock<mutex> lock(m_subs_lock);
+    std::pair<SubscriptionList::right_iterator,SubscriptionList::right_iterator> range = m_subscriptions.right.equal_range(topicURI);
+    for (SubscriptionList::right_iterator it = range.first;it != range.second; it++) {
         Event msg(topicURI,evt);
-        SessionSet* subscribers = it->second;
-        unique_lock<mutex> subslock(subscribers->m_lock);
-        for (ConnList::iterator it = subscribers->m_cnxs.begin();
-             it != subscribers->m_cnxs.end(); it++) {
-            send(*it,&msg);
-        }
+        /* This seems counter intuitive, but since it is an iterator from the right view,
+         * connection is the second term here (topic, acting as key, is the first) 
+         */
+        send(it->second,&msg);
     }
 }
 
