@@ -15,8 +15,13 @@ Prerequisites:
 - [rapidjson](https://code.google.com/p/rapidjson/)
 
 1. Clone the WAMPP repository
+
     git clone scheme://path/to/wampp
+
 2. Enter the WAMPP directory
+
     cd wampp
+
 3. Build
+
     autoreconf -i && ./configure && make
