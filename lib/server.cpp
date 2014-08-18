@@ -1,3 +1,7 @@
+// Copyright (c) Orange 2014
+// Use of this source code is governed by a BSD-style licence
+// that can be found in the LICENSE file.
+
 #include <boost/bimap.hpp>
 #include <boost/bimap/multiset_of.hpp>
 
